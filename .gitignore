@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+.idea/
+.DS_Store
+.cloud-engineer/
+.env*

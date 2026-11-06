@@ -1,0 +1,17 @@
+{
+  "name": "@cloud-engineer/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "cloud-engineer": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@cloud-engineer/contracts": "workspace:*",
+    "@cloud-engineer/shared": "workspace:*",
+    "@cloud-engineer/workflow": "workspace:*"
+  }
+}
