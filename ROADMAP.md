@@ -1,0 +1,14 @@
+# Roadmap
+
+Scope and priorities follow `CLAUDE.md` §11. Status as of 0.1.0.
+
+| Milestone                 | Scope                                                                                                                                                                                | Status                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| M0 Foundation             | Workspace, contracts, state machine, durable local store, CLI, CI, docs                                                                                                              | **Done**                                                      |
+| M1 Vertical slice         | Blueprint → generated API+DynamoDB(+Cognito) CDK app → gates → plan → approval → deploy → verify → manifest                                                                          | **Implemented locally; live AWS and live Bedrock unverified** |
+| M2 Durable engineering    | Step Functions Standard, CodeBuild workers, DynamoDB/S3 persistence, EventBridge events, resume/cancel, frontend + Cognito UI, bounded repair against real models, cost/policy gates | Not started                                                   |
+| M3 Open platform          | Provider/plugin interfaces, Git adapters, user templates, SDK/API, more app patterns                                                                                                 | Not started                                                   |
+| M4 Zerverless integration | Xero client, Cloud Agent handoff                                                                                                                                                     | Not started (optional)                                        |
+
+Next up (see `docs/development/backlog.md`): live validation in a sandbox account with explicit
+budget, then the CodeBuild isolation boundary.

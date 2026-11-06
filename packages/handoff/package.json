@@ -1,0 +1,16 @@
+{
+  "name": "@cloud-engineer/handoff",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@cloud-engineer/contracts": "workspace:*",
+    "@cloud-engineer/shared": "workspace:*",
+    "zod": "4.6.7"
+  }
+}
