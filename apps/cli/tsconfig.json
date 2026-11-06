@@ -1,6 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
     {
       "path": "../../packages/shared"
@@ -10,11 +12,31 @@
     },
     {
       "path": "../../packages/workflow"
+    },
+    {
+      "path": "../../packages/planning"
+    },
+    {
+      "path": "../../packages/generation"
+    },
+    {
+      "path": "../../packages/validation"
+    },
+    {
+      "path": "../../packages/deployment"
+    },
+    {
+      "path": "../../packages/handoff"
+    },
+    {
+      "path": "../../packages/providers"
     }
   ],
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src"
   },
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": [
+    "src/**/*.test.ts"
+  ]
 }

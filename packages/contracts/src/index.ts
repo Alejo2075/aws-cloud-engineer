@@ -88,7 +88,7 @@ export type AuditEvent = z.infer<typeof AuditEventSchema>;
 export const ApplicationBlueprintSchema = z.object({
   schemaVersion: z.literal('1.0.0'),
   kind: z.literal('ApplicationBlueprint'),
-  name: z.string().min(1),
+  name: z.string().regex(/^[a-z][a-z0-9-]{1,40}$/, 'kebab-case project name'),
   requirements: z.array(
     z.object({
       id: z.string().min(1),
@@ -96,6 +96,22 @@ export const ApplicationBlueprintSchema = z.object({
       text: z.string().min(1),
     }),
   ),
+  entities: z
+    .array(
+      z.object({
+        name: z.string().regex(/^[A-Z][A-Za-z0-9]{0,40}$/, 'PascalCase identifier'),
+        fields: z
+          .array(
+            z.object({
+              name: z.string().regex(/^[a-z][A-Za-z0-9]{0,40}$/, 'camelCase identifier'),
+              type: z.enum(['string', 'number', 'boolean']),
+              required: z.boolean().default(true),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .min(1),
   components: z.array(
     z.object({
       id: z.string().min(1),

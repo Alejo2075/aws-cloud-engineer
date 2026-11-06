@@ -1,0 +1,17 @@
+{
+  "name": "@cloud-engineer/providers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@cloud-engineer/contracts": "workspace:*",
+    "@cloud-engineer/shared": "workspace:*",
+    "@aws-sdk/client-bedrock-runtime": "3.1163.0",
+    "@cloud-engineer/planning": "workspace:*"
+  }
+}
