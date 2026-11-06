@@ -132,6 +132,15 @@ program
   });
 
 program
+  .command('cancel <runId>')
+  .description('Cancel an active run (never undoes a completed deployment)')
+  .option('--actor <name>', 'identity recorded in the audit trail', process.env.USER ?? 'local')
+  .action(async (runId: string, o: { actor: string }) => {
+    const run = await deps().engine.cancel(runId, o.actor);
+    console.log(`${runId}: ${run.status} (${run.stage})`);
+  });
+
+program
   .command('export <runId>')
   .requiredOption('--output <dir>', 'destination directory')
   .action(async (runId: string, o: { output: string }) => {
