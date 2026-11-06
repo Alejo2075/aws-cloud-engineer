@@ -60,7 +60,7 @@ export class ControlPlaneStack extends cdk.Stack {
         buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2023_5,
         computeType: codebuild.ComputeType.SMALL,
       },
-      source: codebuild.Source.s3({ bucket, path: 'runs/' }),
+      source: codebuild.Source.s3({ bucket, path: 'build-input/' }),
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
         phases: {
@@ -71,7 +71,9 @@ export class ControlPlaneStack extends cdk.Stack {
       }),
       encryptionKey: key,
     });
-    bucket.grantRead(project);
+    // Least privilege: the build role sees only the build-input prefix, never other runs' artifacts.
+    // The orchestrator must copy just the run being built into build-input/ (not implemented yet).
+    bucket.grantRead(project, 'build-input/*');
 
     cdk.Tags.of(this).add('ManagedBy', 'cloud-engineer');
     new cdk.CfnOutput(this, 'RunsTableName', { value: table.tableName });

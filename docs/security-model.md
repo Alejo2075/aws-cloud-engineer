@@ -20,6 +20,10 @@ can cost money or affect data.
 
 ## Not yet implemented
 
+- The CodeBuild gate role can read only `build-input/*` in the artifact bucket; copying a single run's source
+  there (and scoping per run with a session policy) is not implemented yet. The role can still list key names in the
+  bucket (CDK adds bucket-level `s3:List*`), though it cannot read objects outside `build-input/`.
+
 The local sandbox is defense in depth, **not** an isolation boundary: generated code still runs as your
 OS user with network access. Production design: ephemeral CodeBuild with a dedicated role, separate
 control-plane / artifact / build / deployment roles, short-lived assumed credentials, KMS-encrypted

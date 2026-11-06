@@ -49,4 +49,22 @@ describe('ControlPlaneStack', () => {
     expect(actions).not.toContain('*');
     expect(actions.some((a) => /^(cloudformation|iam|sts):/.test(a))).toBe(false);
   });
+
+  it('limits build object reads to the build-input prefix, never other runs', () => {
+    const stmts = Object.values(t.findResources('AWS::IAM::Policy')).flatMap(
+      (p) =>
+        p.Properties.PolicyDocument.Statement as { Action: string | string[]; Resource: unknown }[],
+    );
+    const s3Reads = stmts.filter((s) => JSON.stringify(s.Action).includes('s3:GetObject'));
+    expect(s3Reads.length).toBeGreaterThan(0);
+    for (const s of s3Reads) {
+      const resources = Array.isArray(s.Resource) ? s.Resource : [s.Resource];
+      for (const r of resources) {
+        const text = JSON.stringify(r);
+        const isBucketArnOnly = !text.includes('Fn::Join'); // bucket-level List/GetBucket
+        expect(isBucketArnOnly || text.includes('/build-input/')).toBe(true);
+        expect(text).not.toContain('runs/');
+      }
+    }
+  });
 });
