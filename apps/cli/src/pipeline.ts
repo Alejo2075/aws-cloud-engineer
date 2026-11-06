@@ -8,6 +8,7 @@ import {
   deploy as deployPlan,
   awsDeployDeps,
   verifyApi,
+  verifySite,
   type DeployDeps,
   type DeploymentPlan,
 } from '@cloud-engineer/deployment';
@@ -331,12 +332,23 @@ export async function approveAndDeploy(
   const blueprint = JSON.parse(await readFile(join(dir, 'blueprint.json'), 'utf8')) as {
     entities: { name: string }[];
   };
-  const report = await verifyApi(
+  const apiReport = await verifyApi(
     apiUrl,
     blueprint.entities.map((e) => `${e.name.toLowerCase()}s`),
     d.fetchImpl ?? fetch,
     d.now,
   );
+  // Frontend templates also publish a SiteUrl; it must pass its own checks for the run to verify.
+  const siteReport = result.outputs.SiteUrl
+    ? await verifySite(result.outputs.SiteUrl, d.fetchImpl ?? fetch, d.now)
+    : undefined;
+  const report = siteReport
+    ? {
+        verified: apiReport.verified && siteReport.verified,
+        checkedAt: apiReport.checkedAt,
+        checks: [...apiReport.checks, ...siteReport.checks],
+      }
+    : apiReport;
   await saveArtifact(
     d,
     await d.engine.getRun(runId),

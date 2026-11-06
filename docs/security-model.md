@@ -18,6 +18,14 @@ can cost money or affect data.
 | Secret leakage                      | Log redaction; manifest builder rejects secret-shaped values.                                                                                  |
 | Public exposure / IAM / cost        | Template review blocks public routes, wildcard IAM actions, open buckets; flags fixed-cost resources.                                          |
 
+## Generated application controls
+
+Routes require a Cognito JWT and items are scoped to the token's `sub`. The site bucket is private (served via
+CloudFront origin access control, TLS-only); responses carry CSP (`default-src 'self'`, connections limited to
+API Gateway and Cognito in the deployment region), HSTS, `X-Content-Type-Options`, frame-deny and no-referrer.
+API CORS allows only the site's CloudFront origin. The client writes DOM with `textContent`, never `innerHTML`.
+Known exception: the site deployment role needs `cloudfront:CreateInvalidation` on `*` (a CDK requirement).
+
 ## Not yet implemented
 
 - The CodeBuild gate role can read only `build-input/*` in the artifact bucket; copying a single run's source
