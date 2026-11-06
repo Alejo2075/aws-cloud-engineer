@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "ApplicationBlueprint",
+  "name": "booking-app",
+  "requirements": [
+    {
+      "id": "R1",
+      "type": "functional",
+      "text": "Authenticated users create and view restaurant bookings"
+    },
+    {
+      "id": "R2",
+      "type": "assumption",
+      "text": "Single region, staging by default"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Booking",
+      "fields": [
+        {
+          "name": "guestName",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "partySize",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "date",
+          "type": "string",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "type": "api",
+      "awsService": "API Gateway HTTP API + Lambda",
+      "justification": "Small serverless API"
+    },
+    {
+      "id": "C2",
+      "type": "database",
+      "awsService": "DynamoDB",
+      "justification": "On-demand key-value access"
+    },
+    {
+      "id": "C3",
+      "type": "auth",
+      "awsService": "Cognito",
+      "justification": "Managed login"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Booking CRUD API",
+      "satisfies": [
+        "R1"
+      ],
+      "acceptance": [
+        "POST creates booking",
+        "users only see their own bookings"
+      ]
+    }
+  ],
+  "risks": [
+    "No frontend in this template"
+  ]
+}

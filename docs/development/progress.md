@@ -1,28 +1,25 @@
 # Progress
 
-Last updated: 2026-11-06. Source of truth for scope: `CLAUDE.md`.
+Last updated: 2026-11-06. Scope: `CLAUDE.md`.
 
-## Current milestone: M0 — Foundation (in progress)
+## Release readiness: 0.1.0 pre-release (local pipeline)
 
-### Done (verified by `pnpm typecheck && pnpm lint && pnpm format && pnpm test`)
+Verified by `pnpm typecheck && pnpm lint && pnpm format && pnpm test` (64 tests) and by running the
+generated example's own `typecheck`, `test` (9) and `cdk synth`.
 
-- pnpm workspace, strict TypeScript 6.0.3, ESLint, Prettier, Vitest.
-- `@cloud-engineer/contracts`: Run, ApplicationBlueprint, ArtifactRef, Approval, AuditEvent, CloudSystemManifest (zod).
-- `@cloud-engineer/shared`: typed errors, secret redaction.
-- `@cloud-engineer/workflow`: stage transition rules, `RunStore` port, in-memory store, `WorkflowEngine`
-  (create, transition, plan-hash-bound approval, cancel, audit trail). 6 unit tests.
+### Done
 
-### Remaining for M0
+M0 complete. M1 implemented and tested offline: planning, generation, gates, review, repair,
+deployment planning/approval/deploy/verify, handoff, CLI.
 
-- Durable local (file) `RunStore`; CLI `create`, `status`, `approve`, `export`.
-- CI workflow, README, LICENSE (owner must choose), CONTRIBUTING, SECURITY, architecture docs.
-- Manifest JSON Schema export at `docs/integration/cloud-system-manifest.schema.json`.
+### Not verified / not built
 
-### Not started (M1+)
-
-Bedrock planning, code generation, CodeBuild workers, CDK deployment, verification, handoff.
-No AWS resources have been created or modified.
+- No live AWS validation of any kind (no deploy, no CloudFormation/STS calls from tests).
+- Bedrock: adapter reached the service; the author's account had no usable model (403 / daily token throttle). Planning is tested with fixtures only.
+- M2+: control plane, CodeBuild isolation, frontend, resume/cancel CLI.
 
 ### Notes
 
-- TypeScript is pinned to 6.0.3 because typescript-eslint 8.72.1 supports `<6.1.0`; revisit when it supports 7.
+- TypeScript pinned to 6.0.3 (typescript-eslint 8.72.1 supports `<6.1.0`).
+- License Apache-2.0 chosen by the agent as a default; the owner may change it before release.
+- Security review findings (deploy via `npx` with ambient env; HOME exposure in sandbox) were fixed in-repo.

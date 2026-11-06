@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { ApplicationBlueprint } from '@cloud-engineer/contracts';
 import { generateProject, hashFiles, writeProject } from './index.js';
@@ -62,6 +63,16 @@ describe('generateProject', () => {
       expect(await readFile(join(dir, 'a/b.txt'), 'utf8')).toBe('ok');
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('examples/reservation-app', () => {
+  it('matches what the generator produces from its blueprint (no drift)', async () => {
+    const root = fileURLToPath(new URL('../../../examples/reservation-app/', import.meta.url));
+    const bp = JSON.parse(await readFile(join(root, 'blueprint.json'), 'utf8'));
+    for (const f of await generateProject(bp)) {
+      expect(await readFile(join(root, 'generated', f.path), 'utf8'), f.path).toBe(f.content);
     }
   });
 });

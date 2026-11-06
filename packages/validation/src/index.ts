@@ -38,8 +38,8 @@ export function sandboxEnv(home: string, base: NodeJS.ProcessEnv = process.env):
     HOME: home,
     AWS_CONFIG_FILE: '/dev/null',
     AWS_SHARED_CREDENTIALS_FILE: '/dev/null',
-    NPM_CONFIG_USERCONFIG: '/dev/null',
-    NPM_CONFIG_GLOBALCONFIG: '/dev/null',
+    NPM_CONFIG_USERCONFIG: join(home, '.npmrc'),
+    NPM_CONFIG_GLOBALCONFIG: join(home, '.npmrc-global'),
     npm_config_update_notifier: 'false',
   };
   for (const k of ['PATH', 'TMPDIR', 'LANG', 'TERM']) if (base[k] !== undefined) env[k] = base[k];

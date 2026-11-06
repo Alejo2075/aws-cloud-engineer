@@ -1,0 +1,27 @@
+{
+  "name": "booking-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/lambda/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/lambda/index.mjs --external:@aws-sdk/*",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "synth": "npm run build && cdk synth",
+    "deploy": "npm run build && cdk deploy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.275.0",
+    "constructs": "10.8.1"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-dynamodb": "3.1163.0",
+    "@aws-sdk/lib-dynamodb": "3.1163.0",
+    "@types/node": "26.6.6",
+    "aws-cdk": "2.1148.0",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0"
+  }
+}
