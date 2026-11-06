@@ -11,6 +11,7 @@ import {
   exportRun,
   loadPlan,
   projectDir,
+  resumeRun,
   type PipelineDeps,
 } from './pipeline.js';
 
@@ -217,5 +218,58 @@ describe('supplied blueprint', () => {
     expect(run.stage).toBe('AWAITING_APPROVAL');
     const bad = { ...blueprint, tasks: [] };
     await expect(createRun(d, { ...opts, blueprint: bad })).rejects.toThrow(/no task/);
+  });
+});
+
+describe('resume', () => {
+  it('retries a failed quality gate from BUILD without redoing earlier stages', async () => {
+    const ctx = await setup({ gateFails: true });
+    await expect(createRun(ctx.d, opts)).rejects.toThrow(/Quality gate failed/);
+    const failed = (await ctx.d.engine.listRuns())[0]!;
+    expect(failed).toMatchObject({ status: 'FAILED', stage: 'BUILD' });
+    const sourceHashes = failed.artifacts.filter((a) => a.kind === 'source').length;
+
+    // "fix" the problem: gates now pass
+    const fixed = await setup();
+    const run = await resumeRun({ ...ctx.d, gates: fixed.d.gates }, failed.runId, 'me');
+    expect(run).toMatchObject({ status: 'ACTIVE', stage: 'AWAITING_APPROVAL' });
+    expect(run.artifacts.filter((a) => a.kind === 'source')).toHaveLength(sourceHashes);
+    expect((await ctx.d.engine.listEvents(failed.runId)).map((e) => e.type)).toContain(
+      'RunResumed',
+    );
+  });
+
+  it('re-plans with the model when planning failed', async () => {
+    const ctx = await setup({
+      provider: new FixtureProvider(['{"bad":true}', '{"bad":true}', '{"bad":true}']),
+    });
+    await expect(createRun(ctx.d, opts)).rejects.toThrow(/Blueprint invalid/);
+    const failed = (await ctx.d.engine.listRuns())[0]!;
+    expect(failed.stage).toBe('REQUIREMENTS');
+    const run = await resumeRun(
+      { ...ctx.d, provider: new FixtureProvider([JSON.stringify(blueprint)]) },
+      failed.runId,
+    );
+    expect(run.stage).toBe('AWAITING_APPROVAL');
+  });
+
+  it('refuses to resume a run that failed after approval, and never redeploys', async () => {
+    const ctx = await setup({ execCode: 1 });
+    const run = await createRun(ctx.d, opts);
+    const { hash } = await loadPlan(ctx.d, run.runId);
+    await approveAndDeploy(ctx.d, run.runId, {
+      planHash: hash,
+      environment: 'staging',
+      actor: 'me',
+    });
+    await expect(resumeRun(ctx.d, run.runId)).rejects.toThrow(/deployments are not replayed/);
+    expect(ctx.execCalls).toHaveLength(1);
+  });
+
+  it('refuses to resume cancelled or succeeded runs', async () => {
+    const ctx = await setup();
+    const run = await createRun(ctx.d, opts);
+    await ctx.d.engine.cancel(run.runId);
+    await expect(resumeRun(ctx.d, run.runId)).rejects.toThrow(/cannot be resumed/);
   });
 });

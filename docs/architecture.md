@@ -32,6 +32,12 @@ referenced from the run by URI + SHA-256. The run record holds only metadata.
 - Planning, repair and gate execution are bounded (3 plan attempts, 2 repairs, 5-minute step timeout).
 - Any stage failure marks the run `FAILED` and keeps the stage for diagnosis.
 
+## Partially built (offline-tested only)
+
+`providers` contains `DynamoRunStore` (single table + `byCreatedAt` GSI, conditional writes) and
+`S3ArtifactStore` (KMS, SHA-256 checked reads). `infra/` defines the matching table, bucket, event bus and a
+CodeBuild gate project. None of it has run against AWS and the CLI does not use it yet.
+
 ## Target (not built)
 
 API Gateway + Lambda → Step Functions Standard → Bedrock / ephemeral CodeBuild / deployment worker,

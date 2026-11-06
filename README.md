@@ -64,15 +64,18 @@ node apps/cli/dist/index.js create "Build a booking app" --account 123456789012 
 | `create <prompt> --account <id> [--blueprint f]`       | Plan → generate → build/test → plan; stops for approval |
 | `status <runId>` · `runs list` · `runs artifacts <id>` | Inspect persisted state                                 |
 | `approve <runId> --plan-hash <h> --environment <e>`    | Approve that exact plan **and deploy it**               |
+| `resume <runId>`                                       | Retry a failed run from its failed stage                |
+| `cancel <runId>`                                       | Cancel an active run                                    |
 | `export <runId> --output <dir>`                        | Source + `cloud-system-manifest.json`                   |
 
-`resume` and `cancel` exist in the engine API but are not CLI commands yet.
+`resume <runId>` retries a failed run from its failed stage (never after approval: deployments are not replayed).
+Set `CLOUD_ENGINEER_TABLE` to keep run metadata in DynamoDB instead of local files (uses your AWS credentials).
 
 ## Layout
 
 `packages/` — `contracts` (zod schemas), `workflow` (state machine, stores), `planning`, `generation`
 (templates), `validation` (gates, review, repair), `deployment`, `handoff`, `providers` (Bedrock),
-`shared`. `apps/cli` — pipeline and commands. `docs/` — architecture, security model, workflow,
+`shared`. `infra/` — CDK stack for Cloud Engineer's own data plane (synth only). `apps/cli` — pipeline and commands. `docs/` — architecture, security model, workflow,
 manifest JSON Schema. `examples/reservation-app` — blueprint and its generated project (kept in sync by a test).
 
 ## Known limitations
@@ -80,9 +83,12 @@ manifest JSON Schema. `examples/reservation-app` — blueprint and its generated
 - **Never verified against live AWS.** Deploy, STS and CloudFormation code paths are covered by
   unit/pipeline tests with injected fakes only. The Bedrock adapter reached the service once but the
   author's account had no usable model, so a model-planned run has not completed.
-- No Step Functions / CodeBuild / DynamoDB / S3 control plane: gates run on the local machine with an
-  environment sandbox (empty `HOME`, no AWS credentials), not a container or microVM boundary.
-- No frontend, no `resume`/`cancel` CLI commands, one template (API + DynamoDB + Cognito).
+- Cloud control plane is partial and **not deployed or tested against AWS**: `DynamoRunStore`, `S3ArtifactStore`
+  and an `infra/` CDK stack (table, encrypted bucket, event bus, CodeBuild gate project) exist with offline
+  tests, but they are not wired into the CLI pipeline, and there is no Step Functions workflow or Lambda workers.
+  Gates still run on your machine with an environment sandbox (empty `HOME`, no AWS credentials), not a
+  container or microVM boundary.
+- No frontend, one template (API + DynamoDB + Cognito).
 - Repair loop is implemented and unit-tested but unproven against real model output.
 
 ## Documentation

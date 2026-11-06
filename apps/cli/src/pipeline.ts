@@ -82,9 +82,20 @@ export function parseSuppliedBlueprint(input: unknown): ApplicationBlueprint {
   return bp;
 }
 
+interface Intake {
+  accountId: string;
+  blueprint?: unknown;
+}
+
+const now = (d: PipelineDeps) => (d.now ?? (() => new Date()))().toISOString();
+
+async function readJson<T>(d: PipelineDeps, runId: string, name: string): Promise<T> {
+  return JSON.parse(await readFile(join(runDir(d.root, runId), 'artifacts', name), 'utf8')) as T;
+}
+
 /**
- * Drives a new run from the prompt to AWAITING_APPROVAL. Every stage is persisted before the
- * next starts, so an interrupted run can be inspected; failures mark the run FAILED with evidence.
+ * Creates a run, persists its intake, and advances it to AWAITING_APPROVAL. Failures mark the
+ * run FAILED with evidence; `resumeRun` can retry from the stage that failed.
  */
 export async function createRun(d: PipelineDeps, opts: CreateOptions): Promise<Run> {
   if (!/^\d{12}$/.test(opts.accountId)) {
@@ -93,91 +104,170 @@ export async function createRun(d: PipelineDeps, opts: CreateOptions): Promise<R
       '--account must be a 12-digit AWS account id',
     );
   }
-  let run = await d.engine.createRun({
+  const run = await d.engine.createRun({
     prompt: opts.prompt,
     region: opts.region,
     targetEnvironment: opts.environment,
   });
-  const id = run.runId;
-  const fail = async (e: unknown): Promise<never> => {
-    await d.engine.fail(id, e instanceof Error ? e.message : String(e));
-    throw e;
+  const intake: Intake = {
+    accountId: opts.accountId,
+    ...(opts.blueprint !== undefined ? { blueprint: opts.blueprint } : {}),
   };
-  const step = (to: Parameters<WorkflowEngine['transition']>[1]) => d.engine.transition(id, to);
+  await saveArtifact(d, run, 'prompt', 'prompt.txt', opts.prompt);
+  await saveArtifact(d, run, 'prompt', 'intake.json', JSON.stringify(intake, null, 2));
+  return advance(d, run.runId);
+}
 
-  try {
-    await saveArtifact(d, run, 'prompt', 'prompt.txt', opts.prompt);
-    await step('INTAKE');
-    await step('REQUIREMENTS');
-    const blueprint =
-      opts.blueprint !== undefined
-        ? parseSuppliedBlueprint(opts.blueprint)
-        : await planBlueprint(d.provider, opts.prompt);
-    await saveArtifact(
-      d,
-      run,
-      'requirements',
-      'requirements.json',
-      JSON.stringify(blueprint.requirements, null, 2),
+/**
+ * Retries a FAILED run from the stage that failed, or continues an ACTIVE run whose process was
+ * interrupted. Failures after approval (DEPLOY and later) are refused: deployment is never replayed.
+ */
+export async function resumeRun(d: PipelineDeps, runId: string, actor = 'local'): Promise<Run> {
+  const run = await d.engine.getRun(runId);
+  if (run.status === 'FAILED') await d.engine.resume(runId, actor);
+  else if (run.status !== 'ACTIVE') {
+    throw new CloudEngineerError(
+      'INVALID_TRANSITION',
+      `Run is ${run.status} and cannot be resumed`,
     );
-    await step('DESIGN');
-    await saveArtifact(d, run, 'blueprint', 'blueprint.json', JSON.stringify(blueprint, null, 2));
-    await step('PLAN');
-    await step('GENERATE');
-    const files = await generateProject(blueprint);
-    const dir = projectDir(d.root, id);
-    await writeProject(files, dir);
-    await saveArtifact(d, run, 'source', 'source.sha256', hashFiles(files));
-
-    await step('BUILD');
-    const gates = d.gates ?? runGates;
-    let report = await gates(dir);
-    if (!report.passed && d.repair) {
-      const outcome = await repairLoop(dir, d.provider, gates);
-      report = outcome.reports[outcome.reports.length - 1]!;
-    }
-    await saveArtifact(d, run, 'test-report', 'gates.json', JSON.stringify(report, null, 2));
-    if (!report.passed)
-      throw new CloudEngineerError(
-        'VALIDATION_FAILED',
-        `Quality gate failed: ${report.failed?.id}`,
-      );
-    await step('TEST');
-
-    await step('SECURITY_REVIEW');
-    const stackName = `${blueprint.name}-${opts.environment}`;
-    const template = await readSynthesizedTemplate(dir, stackName);
-    const findings = reviewTemplate(template);
-    await saveArtifact(d, run, 'log', 'security-findings.json', JSON.stringify(findings, null, 2));
-    if (hasBlockers(findings))
-      throw new CloudEngineerError('BLOCKED', 'Security review found blocking issues', findings);
-
-    await step('DEPLOYMENT_REVIEW');
-    const templateText = await readFile(join(dir, 'cdk.out', `${stackName}.template.json`), 'utf8');
-    const { plan, hash } = createDeploymentPlan({
-      runId: id,
-      stackName,
-      accountId: opts.accountId,
-      region: opts.region,
-      environment: opts.environment,
-      templateText,
-      assemblySha256: await hashAssembly(join(dir, 'cdk.out')),
-    });
-    // The artifact's sha256 is the plan hash, which is exactly what approval binds to.
-    const planPath = join(runDir(d.root, id), 'artifacts', 'plan.json');
-    await mkdir(join(runDir(d.root, id), 'artifacts'), { recursive: true });
-    await writeFile(planPath, JSON.stringify(plan, null, 2));
-    await d.engine.attachArtifact(id, {
-      kind: 'plan',
-      uri: `file://${planPath}`,
-      sha256: hash,
-      createdAt: (d.now ?? (() => new Date()))().toISOString(),
-    });
-    run = await step('AWAITING_APPROVAL');
-    return run;
-  } catch (e) {
-    return fail(e);
   }
+  return advance(d, runId);
+}
+
+/** State-driven loop: each stage's work is idempotent and keyed off persisted artifacts. */
+async function advance(d: PipelineDeps, runId: string): Promise<Run> {
+  const dir = projectDir(d.root, runId);
+  const step = (to: Parameters<WorkflowEngine['transition']>[1]) => d.engine.transition(runId, to);
+  try {
+    for (;;) {
+      const run = await d.engine.getRun(runId);
+      if (run.status !== 'ACTIVE') return run;
+      switch (run.stage) {
+        case 'CREATED':
+          await step('INTAKE');
+          break;
+        case 'INTAKE':
+          await step('REQUIREMENTS');
+          break;
+        case 'REQUIREMENTS': {
+          const intake = await readJson<Intake>(d, runId, 'intake.json');
+          const blueprint =
+            intake.blueprint !== undefined
+              ? parseSuppliedBlueprint(intake.blueprint)
+              : await planBlueprint(d.provider, run.prompt);
+          await saveArtifact(
+            d,
+            run,
+            'requirements',
+            'requirements.json',
+            JSON.stringify(blueprint.requirements, null, 2),
+          );
+          await saveArtifact(
+            d,
+            run,
+            'blueprint',
+            'blueprint.json',
+            JSON.stringify(blueprint, null, 2),
+          );
+          await step('DESIGN');
+          break;
+        }
+        case 'DESIGN':
+          await step('PLAN');
+          break;
+        case 'PLAN':
+          await step('GENERATE');
+          break;
+        case 'GENERATE': {
+          const blueprint = parseSuppliedBlueprint(await readJson(d, runId, 'blueprint.json'));
+          const files = await generateProject(blueprint);
+          await writeProject(files, dir);
+          await saveArtifact(d, run, 'source', 'source.sha256', hashFiles(files));
+          await step('BUILD');
+          break;
+        }
+        case 'BUILD': {
+          const gates = d.gates ?? runGates;
+          let report = await gates(dir);
+          if (!report.passed && d.repair) {
+            const outcome = await repairLoop(dir, d.provider, gates);
+            report = outcome.reports[outcome.reports.length - 1]!;
+          }
+          await saveArtifact(d, run, 'test-report', 'gates.json', JSON.stringify(report, null, 2));
+          if (!report.passed) {
+            throw new CloudEngineerError(
+              'VALIDATION_FAILED',
+              `Quality gate failed: ${report.failed?.id}`,
+            );
+          }
+          await step('TEST');
+          break;
+        }
+        case 'TEST':
+          await step('SECURITY_REVIEW');
+          break;
+        case 'SECURITY_REVIEW': {
+          const stackName = await stackNameOf(d, run);
+          const findings = reviewTemplate(await readSynthesizedTemplate(dir, stackName));
+          await saveArtifact(
+            d,
+            run,
+            'log',
+            'security-findings.json',
+            JSON.stringify(findings, null, 2),
+          );
+          if (hasBlockers(findings)) {
+            throw new CloudEngineerError(
+              'BLOCKED',
+              'Security review found blocking issues',
+              findings,
+            );
+          }
+          await step('DEPLOYMENT_REVIEW');
+          break;
+        }
+        case 'DEPLOYMENT_REVIEW': {
+          const stackName = await stackNameOf(d, run);
+          const intake = await readJson<Intake>(d, runId, 'intake.json');
+          const templateText = await readFile(
+            join(dir, 'cdk.out', `${stackName}.template.json`),
+            'utf8',
+          );
+          const { plan, hash } = createDeploymentPlan({
+            runId,
+            stackName,
+            accountId: intake.accountId,
+            region: run.region,
+            environment: run.targetEnvironment,
+            templateText,
+            assemblySha256: await hashAssembly(join(dir, 'cdk.out')),
+          });
+          // The artifact's sha256 is the plan hash, which is exactly what approval binds to.
+          const planPath = join(runDir(d.root, runId), 'artifacts', 'plan.json');
+          await mkdir(join(runDir(d.root, runId), 'artifacts'), { recursive: true });
+          await writeFile(planPath, JSON.stringify(plan, null, 2));
+          await d.engine.attachArtifact(runId, {
+            kind: 'plan',
+            uri: `file://${planPath}`,
+            sha256: hash,
+            createdAt: now(d),
+          });
+          await step('AWAITING_APPROVAL');
+          break;
+        }
+        default:
+          return run; // AWAITING_APPROVAL and later stages are driven by approve
+      }
+    }
+  } catch (e) {
+    await d.engine.fail(runId, e instanceof Error ? e.message : String(e));
+    throw e;
+  }
+}
+
+async function stackNameOf(d: PipelineDeps, run: Run): Promise<string> {
+  const bp = await readJson<{ name: string }>(d, run.runId, 'blueprint.json');
+  return `${bp.name}-${run.targetEnvironment}`;
 }
 
 export async function loadPlan(
