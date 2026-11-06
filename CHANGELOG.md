@@ -2,7 +2,7 @@
 
 Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versions may break).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-11-06
 
 ### Added
 
