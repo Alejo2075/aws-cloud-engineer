@@ -1,5 +1,10 @@
 export type ErrorCode =
-  'VALIDATION_FAILED' | 'INVALID_TRANSITION' | 'NOT_FOUND' | 'APPROVAL_MISMATCH' | 'CONFLICT';
+  | 'VALIDATION_FAILED'
+  | 'INVALID_TRANSITION'
+  | 'NOT_FOUND'
+  | 'APPROVAL_MISMATCH'
+  | 'CONFLICT'
+  | 'BLOCKED';
 
 export class CloudEngineerError extends Error {
   constructor(

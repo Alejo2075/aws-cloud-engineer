@@ -80,6 +80,9 @@ importers:
       '@cloud-engineer/shared':
         specifier: workspace:*
         version: link:../shared
+      '@cloud-engineer/validation':
+        specifier: workspace:*
+        version: link:../validation
 
   packages/generation:
     dependencies:
@@ -130,6 +133,12 @@ importers:
       '@cloud-engineer/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@cloud-engineer/generation':
+        specifier: workspace:*
+        version: link:../generation
+      '@cloud-engineer/planning':
+        specifier: workspace:*
+        version: link:../planning
       '@cloud-engineer/shared':
         specifier: workspace:*
         version: link:../shared

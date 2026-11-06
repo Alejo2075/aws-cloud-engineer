@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@cloud-engineer/contracts": "workspace:*",
-    "@cloud-engineer/shared": "workspace:*"
+    "@cloud-engineer/shared": "workspace:*",
+    "@cloud-engineer/planning": "workspace:*",
+    "@cloud-engineer/generation": "workspace:*"
   }
 }

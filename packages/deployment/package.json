@@ -12,6 +12,7 @@
     "@cloud-engineer/contracts": "workspace:*",
     "@cloud-engineer/shared": "workspace:*",
     "@aws-sdk/client-sts": "3.1163.0",
-    "@aws-sdk/client-cloudformation": "3.1163.0"
+    "@aws-sdk/client-cloudformation": "3.1163.0",
+    "@cloud-engineer/validation": "workspace:*"
   }
 }
