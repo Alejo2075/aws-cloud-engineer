@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, normalize, resolve, sep } from 'node:path';
 import { CloudEngineerError, redact } from '@cloud-engineer/shared';
 import { writeProject, type GeneratedFile } from '@cloud-engineer/generation';
@@ -26,11 +27,22 @@ export function assertAllowed(argv: readonly string[]): void {
     throw new CloudEngineerError('VALIDATION_FAILED', `Command not allowed: ${argv.join(' ')}`);
 }
 
-/** Environment for untrusted code: no AWS credentials, tokens or profiles. */
-export function sandboxEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const keep = ['PATH', 'HOME', 'TMPDIR', 'LANG', 'TERM', 'NODE_OPTIONS'];
-  const env: NodeJS.ProcessEnv = { CI: 'true' };
-  for (const k of keep) if (base[k] !== undefined) env[k] = base[k];
+/**
+ * Environment for untrusted code: no AWS credentials, tokens or profiles, and an empty HOME so
+ * ~/.aws, ~/.npmrc, ~/.ssh and friends are unreachable by path. This is defense in depth for
+ * local development; the production boundary is an ephemeral CodeBuild project (see docs).
+ */
+export function sandboxEnv(home: string, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    CI: 'true',
+    HOME: home,
+    AWS_CONFIG_FILE: '/dev/null',
+    AWS_SHARED_CREDENTIALS_FILE: '/dev/null',
+    NPM_CONFIG_USERCONFIG: '/dev/null',
+    NPM_CONFIG_GLOBALCONFIG: '/dev/null',
+    npm_config_update_notifier: 'false',
+  };
+  for (const k of ['PATH', 'TMPDIR', 'LANG', 'TERM']) if (base[k] !== undefined) env[k] = base[k];
   return env;
 }
 
@@ -52,8 +64,9 @@ export async function runCommand(
 ): Promise<StepResult> {
   assertAllowed(argv);
   const started = Date.now();
-  return new Promise((resolvePromise) => {
-    const child = spawn(argv[0]!, argv.slice(1), { cwd, env: sandboxEnv(), shell: false });
+  const home = await mkdtemp(join(tmpdir(), 'ce-home-'));
+  const result = await new Promise<StepResult>((resolvePromise) => {
+    const child = spawn(argv[0]!, argv.slice(1), { cwd, env: sandboxEnv(home), shell: false });
     const chunks: Buffer[] = [];
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -78,6 +91,8 @@ export async function runCommand(
     child.on('error', (e) => finish(null, `\nspawn error: ${e.message}`));
     child.on('close', (code) => finish(code));
   });
+  await rm(home, { recursive: true, force: true });
+  return result;
 }
 
 export const DEFAULT_GATES: ReadonlyArray<{ id: string; argv: string[] }> = [

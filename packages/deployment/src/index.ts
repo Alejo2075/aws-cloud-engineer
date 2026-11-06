@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { cp, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { homedir, tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import type { Approval } from '@cloud-engineer/contracts';
@@ -25,6 +27,8 @@ export interface DeploymentPlan {
   environment: string;
   /** SHA-256 of the exact synthesized template that would be deployed. */
   templateSha256: string;
+  /** SHA-256 over every file of the cloud assembly (template, asset manifests, asset bundles). */
+  assemblySha256: string;
   resources: PlannedResource[];
   findings: Finding[];
   risks: string[];
@@ -50,6 +54,26 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** Deterministic hash of a whole cloud assembly directory (relative paths + bytes, sorted). */
+export async function hashAssembly(dir: string): Promise<string> {
+  const files: string[] = [];
+  const walk = async (d: string): Promise<void> => {
+    for (const e of await readdir(d, { withFileTypes: true })) {
+      const full = join(d, e.name);
+      if (e.isDirectory()) await walk(full);
+      else files.push(full);
+    }
+  };
+  await walk(dir);
+  const h = createHash('sha256');
+  for (const f of files.sort())
+    h.update(relative(dir, f))
+      .update('\0')
+      .update(await readFile(f))
+      .update('\0');
+  return h.digest('hex');
+}
+
 export const planHashOf = (plan: DeploymentPlan) => sha256(canonicalJson(plan));
 
 export function createDeploymentPlan(input: {
@@ -59,6 +83,7 @@ export function createDeploymentPlan(input: {
   region: string;
   environment: string;
   templateText: string;
+  assemblySha256: string;
 }): { plan: DeploymentPlan; hash: string } {
   if (!/^\d{12}$/.test(input.accountId)) {
     throw new CloudEngineerError('VALIDATION_FAILED', 'accountId must be 12 digits');
@@ -91,6 +116,7 @@ export function createDeploymentPlan(input: {
     region: input.region,
     environment: input.environment,
     templateSha256: sha256(input.templateText),
+    assemblySha256: input.assemblySha256,
     resources,
     findings,
     risks,
@@ -128,7 +154,6 @@ export function renderPlan(plan: DeploymentPlan, hash: string): string {
 
 export function buildDeployArgs(plan: DeploymentPlan, outputsFile: string): string[] {
   return [
-    'cdk',
     'deploy',
     plan.stackName,
     '--app',
@@ -142,7 +167,30 @@ export function buildDeployArgs(plan: DeploymentPlan, outputsFile: string): stri
 
 export interface DeployDeps {
   callerAccount(region: string): Promise<string>;
-  exec(args: string[], cwd: string): Promise<{ exitCode: number | null; log: string }>;
+  /** Runs the deploy for the assembly in `assemblyDir` (a directory named cdk.out's parent contents). */
+  exec(
+    args: string[],
+    assemblyDir: string,
+  ): Promise<{
+    exitCode: number | null;
+    log: string;
+    outputs?: Record<string, Record<string, string>>;
+  }>;
+}
+
+/** Only these variables reach the CDK CLI: AWS credential/config settings and PATH. */
+export function deployEnv(home: string, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    HOME: home,
+    AWS_CONFIG_FILE: base.AWS_CONFIG_FILE ?? join(homedir(), '.aws', 'config'),
+    AWS_SHARED_CREDENTIALS_FILE:
+      base.AWS_SHARED_CREDENTIALS_FILE ?? join(homedir(), '.aws', 'credentials'),
+    NPM_CONFIG_USERCONFIG: '/dev/null',
+  };
+  for (const [k, v] of Object.entries(base)) {
+    if (v !== undefined && (k === 'PATH' || /^AWS_/.test(k)) && !(k in env)) env[k] = v;
+  }
+  return env;
 }
 
 export const awsDeployDeps: DeployDeps = {
@@ -150,17 +198,41 @@ export const awsDeployDeps: DeployDeps = {
     const id = await new STSClient({ region }).send(new GetCallerIdentityCommand({}));
     return id.Account ?? '';
   },
-  exec: (args, cwd) =>
-    new Promise((resolve) => {
-      const child = spawn('npx', args, { cwd, shell: false, env: process.env });
-      const out: Buffer[] = [];
-      child.stdout.on('data', (d: Buffer) => out.push(d));
-      child.stderr.on('data', (d: Buffer) => out.push(d));
-      child.on('error', (e) => resolve({ exitCode: null, log: e.message }));
-      child.on('close', (code) =>
-        resolve({ exitCode: code, log: Buffer.concat(out).toString('utf8') }),
-      );
-    }),
+  /**
+   * Uses the CDK CLI pinned in this package (never the generated project's node_modules or
+   * `npx`), from a temp directory holding only a copy of the verified cloud assembly.
+   */
+  async exec(args, assemblyDir) {
+    const cdkBin = createRequire(import.meta.url).resolve('aws-cdk/bin/cdk');
+    const work = await mkdtemp(join(tmpdir(), 'ce-deploy-'));
+    try {
+      await cp(assemblyDir, join(work, 'cdk.out'), { recursive: true });
+      const outputsFile = join(work, 'outputs.json');
+      const finalArgs = args.map((a) => (a === 'cdk-outputs.json' ? outputsFile : a));
+      const res = await new Promise<{ exitCode: number | null; log: string }>((resolve) => {
+        const child = spawn(process.execPath, [cdkBin, ...finalArgs], {
+          cwd: work,
+          shell: false,
+          env: deployEnv(work),
+        });
+        const out: Buffer[] = [];
+        child.stdout.on('data', (d: Buffer) => out.push(d));
+        child.stderr.on('data', (d: Buffer) => out.push(d));
+        child.on('error', (e) => resolve({ exitCode: null, log: e.message }));
+        child.on('close', (code) =>
+          resolve({ exitCode: code, log: Buffer.concat(out).toString('utf8') }),
+        );
+      });
+      if (res.exitCode !== 0) return res;
+      const outputs = JSON.parse(await readFile(outputsFile, 'utf8')) as Record<
+        string,
+        Record<string, string>
+      >;
+      return { ...res, outputs };
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  },
 };
 
 export type DeployResult =
@@ -183,15 +255,13 @@ export async function deploy(
   if (approval.targetEnvironment !== plan.environment || approval.runId !== plan.runId) {
     throw new CloudEngineerError('APPROVAL_MISMATCH', 'Approval environment or run mismatch');
   }
-  const templateText = await readFile(
-    join(projectDir, 'cdk.out', `${plan.stackName}.template.json`),
-    'utf8',
-  );
-  if (sha256(templateText) !== plan.templateSha256) {
-    throw new CloudEngineerError(
-      'APPROVAL_MISMATCH',
-      'Synthesized template changed since the plan',
-    );
+  const assemblyDir = join(projectDir, 'cdk.out');
+  const templateText = await readFile(join(assemblyDir, `${plan.stackName}.template.json`), 'utf8');
+  if (
+    sha256(templateText) !== plan.templateSha256 ||
+    (await hashAssembly(assemblyDir)) !== plan.assemblySha256
+  ) {
+    throw new CloudEngineerError('APPROVAL_MISMATCH', 'Cloud assembly changed since the plan');
   }
   const account = await deps.callerAccount(plan.region);
   if (account !== plan.accountId) {
@@ -200,14 +270,9 @@ export async function deploy(
       `Credentials belong to ${account}, plan targets ${plan.accountId}`,
     );
   }
-  const outputsFile = 'cdk-outputs.json';
-  const res = await deps.exec(buildDeployArgs(plan, outputsFile), projectDir);
+  const res = await deps.exec(buildDeployArgs(plan, 'cdk-outputs.json'), assemblyDir);
   if (res.exitCode !== 0) return { status: 'failed', log: res.log.slice(-4000) };
-  const raw = JSON.parse(await readFile(join(projectDir, outputsFile), 'utf8')) as Record<
-    string,
-    Record<string, string>
-  >;
-  return { status: 'deployed', outputs: raw[plan.stackName] ?? {} };
+  return { status: 'deployed', outputs: res.outputs?.[plan.stackName] ?? {} };
 }
 
 /** Reports the real CloudFormation state, including rollback states. */

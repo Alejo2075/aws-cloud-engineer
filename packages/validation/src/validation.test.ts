@@ -27,14 +27,21 @@ describe('command policy', () => {
     }
   });
 
-  it('strips AWS and token variables from the sandbox environment', () => {
-    const env = sandboxEnv({
+  it('strips AWS and token variables and points HOME at an empty directory', () => {
+    const env = sandboxEnv('/empty', {
       PATH: '/bin',
+      HOME: '/Users/me',
       AWS_ACCESS_KEY_ID: 'AKIAXXXXXXXXXXXXXXXX',
       GITHUB_TOKEN: 't',
-      HOME: '/h',
+      NODE_OPTIONS: '--require /evil.js',
     });
-    expect(env).toEqual({ CI: 'true', PATH: '/bin', HOME: '/h' });
+    expect(env.HOME).toBe('/empty');
+    expect(env.PATH).toBe('/bin');
+    expect(env.AWS_CONFIG_FILE).toBe('/dev/null');
+    expect(env.AWS_SHARED_CREDENTIALS_FILE).toBe('/dev/null');
+    expect(Object.keys(env)).not.toContain('AWS_ACCESS_KEY_ID');
+    expect(Object.keys(env)).not.toContain('GITHUB_TOKEN');
+    expect(Object.keys(env)).not.toContain('NODE_OPTIONS');
   });
 
   it('refuses to execute a disallowed command', async () => {

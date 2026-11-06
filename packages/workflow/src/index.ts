@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { CloudEngineerError } from '@cloud-engineer/shared';
 import {
   RUN_STAGES,
+  type ArtifactRef,
   type Approval,
   type AuditEvent,
   type Run,
@@ -101,6 +102,10 @@ export class WorkflowEngine {
     return run;
   }
 
+  listRuns(): Promise<Run[]> {
+    return this.store.list();
+  }
+
   async getRun(runId: string): Promise<Run> {
     const run = await this.store.get(runId);
     if (!run) throw new CloudEngineerError('NOT_FOUND', `Run ${runId} not found`);
@@ -167,6 +172,33 @@ export class WorkflowEngine {
     };
     await this.store.put(updated, run.updatedAt);
     await this.audit(updated, 'DeploymentApproved', actor, { planHash: input.planHash });
+    return updated;
+  }
+
+  /** Appends an artifact reference; replays of the same (kind, sha256) are ignored. */
+  async attachArtifact(runId: string, ref: ArtifactRef, actor = 'local'): Promise<Run> {
+    const run = await this.getRun(runId);
+    if (run.artifacts.some((a) => a.kind === ref.kind && a.sha256 === ref.sha256)) return run;
+    const updated: Run = {
+      ...run,
+      artifacts: [...run.artifacts, ref],
+      updatedAt: this.now().toISOString(),
+    };
+    await this.store.put(updated, run.updatedAt);
+    await this.audit(updated, 'ArtifactAttached', actor, { kind: ref.kind, sha256: ref.sha256 });
+    return updated;
+  }
+
+  /** Marks the run FAILED (stage preserved for diagnosis). Terminal runs are left alone. */
+  async fail(runId: string, reason: string, actor = 'local'): Promise<Run> {
+    const run = await this.getRun(runId);
+    if (run.status !== 'ACTIVE') return run;
+    const updated: Run = { ...run, status: 'FAILED', updatedAt: this.now().toISOString() };
+    await this.store.put(updated, run.updatedAt);
+    await this.audit(updated, 'RunFailed', actor, {
+      stage: run.stage,
+      reason: reason.slice(0, 500),
+    });
     return updated;
   }
 

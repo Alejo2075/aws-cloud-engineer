@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Approval } from '@cloud-engineer/contracts';
 import {
   buildDeployArgs,
+  deployEnv,
   canonicalJson,
   createDeploymentPlan,
   deploy,
+  hashAssembly,
   planHashOf,
   renderPlan,
   verifyApi,
@@ -34,6 +36,7 @@ const base = {
   region: 'us-east-1',
   environment: 'staging',
   templateText: template,
+  assemblySha256: 'a'.repeat(64),
 };
 
 const dirs: string[] = [];
@@ -45,12 +48,10 @@ async function project(text = template) {
   dirs.push(dir);
   await mkdir(join(dir, 'cdk.out'));
   await writeFile(join(dir, 'cdk.out', 'app-staging.template.json'), text);
-  await writeFile(
-    join(dir, 'cdk-outputs.json'),
-    JSON.stringify({ 'app-staging': { ApiUrl: 'https://x.example' } }),
-  );
   return dir;
 }
+const planned = async (dir: string) =>
+  createDeploymentPlan({ ...base, assemblySha256: await hashAssembly(join(dir, 'cdk.out')) });
 const approvalFor = (hash: string, over: Partial<Approval> = {}): Approval => ({
   runId: 'run-1',
   stage: 'deployment',
@@ -66,7 +67,11 @@ const deps = (account = '123456789012', exitCode: number | null = 0) => {
     callerAccount: async () => account,
     exec: async (args) => {
       calls.push(args);
-      return { exitCode, log: 'log' };
+      return {
+        exitCode,
+        log: 'log',
+        outputs: { 'app-staging': { ApiUrl: 'https://x.example' } },
+      };
     },
   };
   return { d, calls };
@@ -106,8 +111,8 @@ describe('plan', () => {
 
 describe('deploy', () => {
   it('deploys the pre-synthesized assembly with the approved plan', async () => {
-    const { plan, hash } = createDeploymentPlan(base);
     const dir = await project();
+    const { plan, hash } = await planned(dir);
     const { d, calls } = deps();
     const res = await deploy(dir, plan, approvalFor(hash), d);
     expect(res).toEqual({ status: 'deployed', outputs: { ApiUrl: 'https://x.example' } });
@@ -124,41 +129,73 @@ describe('deploy', () => {
     ],
     ['wrong run', (h: string) => approvalFor(h, { runId: 'other' }), undefined],
   ])('refuses %s without executing anything', async (_n, mk) => {
-    const { plan, hash } = createDeploymentPlan(base);
+    const dir = await project();
+    const { plan, hash } = await planned(dir);
     const { d, calls } = deps();
-    await expect(deploy(await project(), plan, mk(hash), d)).rejects.toMatchObject({
+    await expect(deploy(dir, plan, mk(hash), d)).rejects.toMatchObject({
       code: 'APPROVAL_MISMATCH',
     });
     expect(calls).toHaveLength(0);
   });
 
-  it('refuses when the template changed after planning', async () => {
-    const { plan, hash } = createDeploymentPlan(base);
+  it('refuses when the cloud assembly changed after planning', async () => {
+    const dir = await project();
+    const { plan, hash } = await planned(dir);
+    await writeFile(join(dir, 'cdk.out', 'app-staging.template.json'), template + ' ');
     const { d, calls } = deps();
-    await expect(deploy(await project(template + ' '), plan, approvalFor(hash), d)).rejects.toThrow(
-      /changed since the plan/,
-    );
+    await expect(deploy(dir, plan, approvalFor(hash), d)).rejects.toThrow(/changed since the plan/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('refuses when only an asset file changed (not the template)', async () => {
+    const dir = await project();
+    await mkdir(join(dir, 'cdk.out', 'asset.1'));
+    await writeFile(join(dir, 'cdk.out', 'asset.1', 'index.mjs'), 'good');
+    const { plan, hash } = await planned(dir);
+    await writeFile(join(dir, 'cdk.out', 'asset.1', 'index.mjs'), 'evil');
+    const { d, calls } = deps();
+    await expect(deploy(dir, plan, approvalFor(hash), d)).rejects.toThrow(/changed since the plan/);
     expect(calls).toHaveLength(0);
   });
 
   it('refuses when credentials belong to a different account', async () => {
-    const { plan, hash } = createDeploymentPlan(base);
+    const dir = await project();
+    const { plan, hash } = await planned(dir);
     const { d, calls } = deps('999999999999');
-    await expect(deploy(await project(), plan, approvalFor(hash), d)).rejects.toThrow(
-      /999999999999/,
-    );
+    await expect(deploy(dir, plan, approvalFor(hash), d)).rejects.toThrow(/999999999999/);
     expect(calls).toHaveLength(0);
   });
 
   it('reports a failed deployment instead of success', async () => {
-    const { plan, hash } = createDeploymentPlan(base);
-    const res = await deploy(await project(), plan, approvalFor(hash), deps('123456789012', 1).d);
+    const dir = await project();
+    const { plan, hash } = await planned(dir);
+    const res = await deploy(dir, plan, approvalFor(hash), deps('123456789012', 1).d);
     expect(res.status).toBe('failed');
   });
 
   it('planHashOf matches the hash returned at planning time', () => {
     const { plan, hash } = createDeploymentPlan(base);
     expect(planHashOf(plan)).toBe(hash);
+  });
+});
+
+describe('deployEnv', () => {
+  it('passes only AWS settings and PATH, with an isolated HOME', () => {
+    const env = deployEnv('/work', {
+      PATH: '/bin',
+      HOME: '/Users/me',
+      AWS_PROFILE: 'p',
+      AWS_REGION: 'us-east-1',
+      GITHUB_TOKEN: 'x',
+      NODE_OPTIONS: '--require /evil.js',
+      NPM_CONFIG_REGISTRY: 'https://evil.example',
+    });
+    expect(env.HOME).toBe('/work');
+    expect(env.AWS_PROFILE).toBe('p');
+    expect(Object.keys(env)).not.toEqual(expect.arrayContaining(['GITHUB_TOKEN']));
+    for (const k of ['GITHUB_TOKEN', 'NODE_OPTIONS', 'NPM_CONFIG_REGISTRY']) {
+      expect(k in env).toBe(false);
+    }
   });
 });
 
