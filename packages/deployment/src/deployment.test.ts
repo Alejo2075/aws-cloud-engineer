@@ -13,6 +13,7 @@ import {
   planHashOf,
   renderPlan,
   verifyApi,
+  verifySite,
   type DeployDeps,
 } from './index.js';
 
@@ -216,5 +217,46 @@ describe('verifyApi', () => {
     const r = await verifyApi('http://x.example', ['bookings'], boom);
     expect(r.verified).toBe(false);
     expect(r.checks.map((c) => c.detail)).toContain('ECONNREFUSED');
+  });
+});
+
+describe('verifySite', () => {
+  const site = (over: { status?: number; headers?: Record<string, string>; cfg?: unknown } = {}) =>
+    (async (url: string) => {
+      if (String(url).endsWith('/config.json')) {
+        return new Response(JSON.stringify(over.cfg ?? { apiUrl: 'https://api.example.com' }), {
+          status: 200,
+        });
+      }
+      return new Response('<html>', {
+        status: over.status ?? 200,
+        headers: over.headers ?? {
+          'content-security-policy': "default-src 'self'",
+          'strict-transport-security': 'max-age=1',
+        },
+      });
+    }) as unknown as typeof fetch;
+
+  it('verifies a healthy site with security headers and a config', async () => {
+    expect((await verifySite('https://d1.cloudfront.net', site())).verified).toBe(true);
+  });
+  it('fails without CSP/HSTS headers', async () => {
+    const r = await verifySite('https://d1.cloudfront.net', site({ headers: {} }));
+    expect(r.verified).toBe(false);
+    expect(r.checks.filter((c) => !c.passed).map((c) => c.detail)).toEqual([
+      'content-security-policy',
+      'strict-transport-security',
+    ]);
+  });
+  it('fails when config.json does not point at an https API', async () => {
+    const r = await verifySite('https://d1.cloudfront.net', site({ cfg: { apiUrl: 'http://x' } }));
+    expect(r.verified).toBe(false);
+  });
+  it('fails on http URLs and network errors', async () => {
+    const boom = (async () => {
+      throw new Error('ENOTFOUND');
+    }) as typeof fetch;
+    const r = await verifySite('http://x', boom);
+    expect(r.verified).toBe(false);
   });
 });

@@ -6,7 +6,7 @@
 4. CodeBuild gate runner client (project defined in `infra/`; local sandbox stays dev-only).
 5. Step Functions Standard definition + approval callback (task token).
 6. CLI: `runs approve` alias; `NEEDS_INPUT` flow for blocking questions.
-7. Frontend template (static export on S3 + CloudFront) and Cognito hosted UI.
+7. Upgrade the frontend to React/Next.js static export; custom domain + WAF; Cognito hosted UI.
 8. Pagination in the generated list endpoint; update expressions.
 9. Cost estimate from the Pricing API instead of qualitative notes.
 10. Git adapter for repository output.

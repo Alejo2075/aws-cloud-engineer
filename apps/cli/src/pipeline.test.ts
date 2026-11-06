@@ -273,3 +273,37 @@ describe('resume', () => {
     await expect(resumeRun(ctx.d, run.runId)).rejects.toThrow(/cannot be resumed/);
   });
 });
+
+describe('site verification', () => {
+  it('requires the frontend to pass its own checks when SiteUrl is an output', async () => {
+    const ctx = await setup({
+      deployDeps: {
+        callerAccount: async () => ACCOUNT,
+        exec: async () => ({
+          exitCode: 0,
+          log: '',
+          outputs: {
+            'booking-app-staging': {
+              ApiUrl: 'https://api.example.com',
+              SiteUrl: 'https://d1.cloudfront.net',
+            },
+          },
+        }),
+      },
+      // API says 401 (good) but the site has no security headers and no config
+      fetchImpl: (async (url: string) =>
+        String(url).includes('cloudfront')
+          ? new Response('x', { status: 200 })
+          : new Response(null, { status: 401 })) as unknown as typeof fetch,
+    });
+    const run = await createRun(ctx.d, opts);
+    const { hash } = await loadPlan(ctx.d, run.runId);
+    const res = await approveAndDeploy(ctx.d, run.runId, {
+      planHash: hash,
+      environment: 'staging',
+      actor: 'me',
+    });
+    expect(res).toMatchObject({ deployed: true, verified: false });
+    expect(res.run.status).toBe('FAILED');
+  });
+});

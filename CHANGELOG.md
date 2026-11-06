@@ -9,6 +9,7 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 - `DynamoRunStore` and `S3ArtifactStore` adapters (offline-tested with fakes; not wired into the CLI).
 - `infra/` CDK stack for the control-plane data layer and a CodeBuild gate project (synth/assertions only).
 - CLI `cancel` and `resume` (retry from the failed stage; refused after approval). Optional DynamoDB run store via `CLOUD_ENGINEER_TABLE`.
+- Generated apps include a static frontend (private S3 + CloudFront OAC, CSP/HSTS headers, CORS limited to the site origin, Cognito sign-in); deployment `verifySite` checks it.
 - Pipeline refactored into resumable, idempotent stages.
 
 ## [0.1.0] - 2026-11-06

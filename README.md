@@ -1,7 +1,7 @@
 # Cloud Engineer
 
 Open-source engine that turns a natural-language request into a reviewed, tested AWS application
-(API Gateway + Lambda + DynamoDB + Cognito, defined with AWS CDK), and stops at an explicit,
+(API Gateway + Lambda + DynamoDB + Cognito + a CloudFront-hosted static frontend, defined with AWS CDK), and stops at an explicit,
 hash-bound approval gate before anything is deployed.
 
 > **Status: `0.1.0` pre-release (M0 + local M1 slice).** The local, single-machine pipeline works and is
@@ -88,7 +88,7 @@ manifest JSON Schema. `examples/reservation-app` — blueprint and its generated
   tests, but they are not wired into the CLI pipeline, and there is no Step Functions workflow or Lambda workers.
   Gates still run on your machine with an environment sandbox (empty `HOME`, no AWS credentials), not a
   container or microVM boundary.
-- No frontend, one template (API + DynamoDB + Cognito).
+- Frontend is a plain static page (no React/Next.js), one template (API + DynamoDB + Cognito).
 - Repair loop is implemented and unit-tested but unproven against real model output.
 
 ## Documentation

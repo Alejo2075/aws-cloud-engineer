@@ -16,6 +16,10 @@ deployment planning/approval/deploy/verify, handoff, CLI.
 
 DynamoRunStore, S3ArtifactStore, `infra/` control-plane stack (synth + assertions), CLI `cancel`. 74 tests. Still no AWS call of any kind.
 
+### Frontend (branch feat/frontend)
+
+Generated apps now include a static frontend on private S3 + CloudFront; 84 repo tests; generated project: 12 tests + synth. Still no AWS call of any kind.
+
 ### Not verified / not built
 
 - No live AWS validation of any kind (no deploy, no CloudFormation/STS calls from tests).
