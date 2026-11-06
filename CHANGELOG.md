@@ -2,6 +2,14 @@
 
 Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versions may break).
 
+## [Unreleased]
+
+### Added
+
+- `DynamoRunStore` and `S3ArtifactStore` adapters (offline-tested with fakes; not wired into the CLI).
+- `infra/` CDK stack for the control-plane data layer and a CodeBuild gate project (synth/assertions only).
+- CLI `cancel`.
+
 ## [0.1.0] - 2026-11-06
 
 ### Added
