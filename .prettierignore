@@ -1,3 +1,4 @@
 CLAUDE.md
 pnpm-lock.yaml
 dist
+**/templates/**
