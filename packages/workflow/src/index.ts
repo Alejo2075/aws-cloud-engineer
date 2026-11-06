@@ -106,6 +106,10 @@ export class WorkflowEngine {
     return this.store.list();
   }
 
+  listEvents(runId: string): Promise<AuditEvent[]> {
+    return this.store.events(runId);
+  }
+
   async getRun(runId: string): Promise<Run> {
     const run = await this.store.get(runId);
     if (!run) throw new CloudEngineerError('NOT_FOUND', `Run ${runId} not found`);
@@ -199,6 +203,27 @@ export class WorkflowEngine {
       stage: run.stage,
       reason: reason.slice(0, 500),
     });
+    return updated;
+  }
+
+  /**
+   * FAILED -> ACTIVE at the same stage so the failed stage can be retried. Refused once a deployment
+   * was approved (DEPLOY and later), because replaying a deployment could double-create resources.
+   */
+  async resume(runId: string, actor = 'local'): Promise<Run> {
+    const run = await this.getRun(runId);
+    if (run.status !== 'FAILED') {
+      throw new CloudEngineerError('INVALID_TRANSITION', `Run is ${run.status}, not FAILED`);
+    }
+    if (['DEPLOY', 'VERIFY', 'HANDOFF', 'SUCCEEDED'].includes(run.stage)) {
+      throw new CloudEngineerError(
+        'INVALID_TRANSITION',
+        `Cannot resume after approval (failed at ${run.stage}); deployments are not replayed`,
+      );
+    }
+    const updated: Run = { ...run, status: 'ACTIVE', updatedAt: this.now().toISOString() };
+    await this.store.put(updated, run.updatedAt);
+    await this.audit(updated, 'RunResumed', actor, { stage: run.stage });
     return updated;
   }
 

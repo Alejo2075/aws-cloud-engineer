@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { Command } from 'commander';
 import { renderPlan } from '@cloud-engineer/deployment';
-import { BedrockProvider } from '@cloud-engineer/providers';
+import { BedrockProvider, DynamoRunStore } from '@cloud-engineer/providers';
 import { CloudEngineerError } from '@cloud-engineer/shared';
 import { FileRunStore, WorkflowEngine } from '@cloud-engineer/workflow';
-import { approveAndDeploy, createRun, exportRun, loadPlan, type PipelineDeps } from './pipeline.js';
+import {
+  approveAndDeploy,
+  createRun,
+  exportRun,
+  loadPlan,
+  resumeRun,
+  type PipelineDeps,
+} from './pipeline.js';
 
 const program = new Command('cloud-engineer')
   .description('Turn a prompt into a verified AWS application')
@@ -15,6 +24,16 @@ const program = new Command('cloud-engineer')
     'where runs are stored',
     process.env.CLOUD_ENGINEER_HOME ?? '.cloud-engineer',
   );
+
+/**
+ * Local files by default. Set CLOUD_ENGINEER_TABLE to keep run metadata in a DynamoDB table
+ * instead (uses your default AWS credentials; artifacts and generated source stay local).
+ */
+function makeStore(root: string) {
+  const table = process.env.CLOUD_ENGINEER_TABLE;
+  if (!table) return new FileRunStore(root);
+  return new DynamoRunStore(DynamoDBDocumentClient.from(new DynamoDBClient({})), table);
+}
 
 const noModel: PipelineDeps['provider'] = {
   generate: () =>
@@ -25,7 +44,7 @@ const noModel: PipelineDeps['provider'] = {
 
 function deps(provider: PipelineDeps['provider'] = noModel): PipelineDeps {
   const root = resolve(program.opts<{ stateDir: string }>().stateDir);
-  return { engine: new WorkflowEngine(new FileRunStore(root)), root, provider };
+  return { engine: new WorkflowEngine(makeStore(root)), root, provider };
 }
 
 function bedrock(region: string) {
@@ -129,6 +148,27 @@ program
       `deployed: ${res.deployed}\nverified: ${res.verified}\nstatus:   ${res.run.status} (${res.run.stage})\n${res.detail}`,
     );
     if (!res.verified) process.exitCode = 1;
+  });
+
+program
+  .command('resume <runId>')
+  .description('Retry a failed run from its failed stage, or continue an interrupted one')
+  .option('--repair', 'allow bounded model-driven repair of failing gates', false)
+  .option('--actor <name>', 'identity recorded in the audit trail', process.env.USER ?? 'local')
+  .action(async (runId: string, o: { repair: boolean; actor: string }) => {
+    const base = deps();
+    const run = await base.engine.getRun(runId);
+    // The model is only contacted if planning or repair actually needs it.
+    let bedrockProvider: PipelineDeps['provider'] | undefined;
+    const lazy: PipelineDeps['provider'] = {
+      generate: (input) => (bedrockProvider ??= bedrock(run.region)).generate(input),
+    };
+    const resumed = await resumeRun({ ...deps(lazy), repair: o.repair }, runId, o.actor);
+    console.log(`${runId}: ${resumed.status} (${resumed.stage})`);
+    if (resumed.stage === 'AWAITING_APPROVAL') {
+      const { plan, hash } = await loadPlan(base, runId);
+      console.log(renderPlan(plan, hash));
+    }
   });
 
 program

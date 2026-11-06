@@ -19,6 +19,8 @@
     "@cloud-engineer/deployment": "workspace:*",
     "@cloud-engineer/handoff": "workspace:*",
     "@cloud-engineer/providers": "workspace:*",
-    "commander": "15.0.0"
+    "commander": "15.0.0",
+    "@aws-sdk/client-dynamodb": "3.1163.0",
+    "@aws-sdk/lib-dynamodb": "3.1163.0"
   }
 }
