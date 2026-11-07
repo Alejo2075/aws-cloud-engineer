@@ -1,3 +1,4 @@
+import { readdir } from 'node:fs/promises';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import {
   BatchGetBuildsCommand,
@@ -14,6 +15,18 @@ import type { DocClient } from './dynamo-store.js';
 const RUN_ID = /^[A-Za-z0-9-]{1,64}$/;
 const STACK = /^[A-Za-z][A-Za-z0-9-]{0,127}$/;
 const ROLE = /^[A-Za-z0-9+=,.@_-]{1,64}$/;
+/** Entries a CDK cloud assembly legitimately has at its root. */
+const ASSEMBLY_ROOT =
+  /^(manifest\.json|tree\.json|cdk\.out|synth\.lock|[\w.-]+\.(template|assets)\.json|asset\.[\w.-]+)$/;
+/** Files that configure tooling instead of describing a deployment: finding one is a red flag. */
+const TOOLING_ROOT = new Set([
+  '.npmrc',
+  'cdk.json',
+  'cdk.context.json',
+  'node_modules',
+  'package.json',
+]);
+
 const REGION = /^[a-z]{2}(-[a-z]+)+-\d$/;
 
 export interface CodeBuildDeployerOptions {
@@ -97,8 +110,20 @@ export class CodeBuildDeployer implements DeployDeps {
     const started = Date.now();
     const sourceKey = `build-input/${ctx.runId}/assembly.zip`;
     const outputPath = `build-output/${ctx.runId}/deploy`;
-    // Every file of the assembly, including bundled assets; nothing is filtered out.
-    const zip = await zipDirectory(assemblyDir, { skip: new Set() });
+    // Whole assets (including bundled node_modules) travel, but the assembly root may only hold
+    // assembly files: tooling configuration there is refused, other stray entries are not uploaded.
+    for (const name of await readdir(assemblyDir)) {
+      if (TOOLING_ROOT.has(name)) {
+        throw new CloudEngineerError(
+          'BLOCKED',
+          `Assembly contains ${name} at its root, which a cloud assembly never needs`,
+        );
+      }
+    }
+    const zip = await zipDirectory(assemblyDir, {
+      skip: new Set(),
+      rootFilter: (name) => ASSEMBLY_ROOT.test(name),
+    });
     await this.o.s3.send(
       new PutObjectCommand({
         Bucket: this.o.bucket,

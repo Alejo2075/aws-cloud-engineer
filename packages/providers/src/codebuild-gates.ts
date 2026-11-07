@@ -29,7 +29,12 @@ const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 /** Deterministic, uncompressed zip (fixed timestamps, sorted entries) of a project directory. */
 export async function zipDirectory(
   dir: string,
-  opts: { includeBuildOutput?: boolean; skip?: ReadonlySet<string> } = {},
+  opts: {
+    includeBuildOutput?: boolean;
+    skip?: ReadonlySet<string>;
+    /** Applied to entries directly under `dir` only: return false to leave an entry out. */
+    rootFilter?: (name: string) => boolean;
+  } = {},
 ): Promise<Buffer> {
   const skip = opts.skip ?? (opts.includeBuildOutput ? WORKSPACE_SKIP : SKIP);
   const root = resolve(dir);
@@ -39,6 +44,7 @@ export async function zipDirectory(
       a.name.localeCompare(b.name),
     )) {
       if (skip.has(e.name)) continue;
+      if (d === root && opts.rootFilter && !opts.rootFilter(e.name)) continue;
       if (e.isDirectory()) await walk(join(d, e.name));
       else if (e.isFile()) files.push(join(d, e.name));
     }

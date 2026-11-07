@@ -179,6 +179,7 @@ describe('ControlPlaneApiStack deployer', () => {
       );
       expect(i('get-caller-identity')).toBeLessThan(i('cdk deploy'));
       expect(spec).toContain('EXPECTED_ACCOUNT');
+      expect(spec).toContain('rm -f');
     }
   });
 

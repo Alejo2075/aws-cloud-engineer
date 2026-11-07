@@ -155,6 +155,7 @@ export class ControlPlaneApiStack extends cdk.Stack {
                 'unset AWS_CONTAINER_CREDENTIALS_RELATIVE_URI AWS_CONTAINER_CREDENTIALS_FULL_URI AWS_CONTAINER_AUTHORIZATION_TOKEN',
                 // Refuse to deploy unless the credentials really belong to the approved account.
                 '[ "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT" ]',
+                'rm -f "$CODEBUILD_SRC_DIR/.npmrc" "$CODEBUILD_SRC_DIR/cdk.json" "$CODEBUILD_SRC_DIR/cdk.context.json"',
                 '/tmp/cdk/node_modules/.bin/cdk deploy "$STACK_NAME" --app "$CODEBUILD_SRC_DIR" --require-approval never --outputs-file "$CODEBUILD_SRC_DIR/cdk-outputs.json"',
               ],
             },
