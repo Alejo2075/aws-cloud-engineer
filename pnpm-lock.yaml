@@ -162,7 +162,7 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@cloud-engineer/validation':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../validation
       '@cloud-engineer/workflow':
         specifier: workspace:*
