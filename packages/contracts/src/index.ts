@@ -85,6 +85,31 @@ export const AuditEventSchema = z.object({
 });
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
 
+export const DOMAIN_EVENT_TYPES = [
+  'RunCreated',
+  'BlueprintPublished',
+  'BuildCompleted',
+  'TestsFailed',
+  'DeploymentApprovalRequested',
+  'DeploymentCompleted',
+  'VerificationFailed',
+  'SystemHandoffPublished',
+] as const;
+
+/** Published for consumers; delivery is at-least-once, so consumers must tolerate duplicates. */
+export const DomainEventSchema = z.object({
+  schemaVersion: z.literal('1.0.0'),
+  /** Stable per source audit entry: a redelivery carries the same id. */
+  id: z.string().min(1),
+  type: z.enum(DOMAIN_EVENT_TYPES),
+  runId: z.string().min(1),
+  correlationId: z.string().min(1),
+  at: z.iso.datetime(),
+  stage: z.enum(RUN_STAGES),
+  artifacts: z.array(z.object({ kind: z.string(), sha256: z.string() })).optional(),
+});
+export type DomainEvent = z.infer<typeof DomainEventSchema>;
+
 export const ApplicationBlueprintSchema = z.object({
   schemaVersion: z.literal('1.0.0'),
   kind: z.literal('ApplicationBlueprint'),

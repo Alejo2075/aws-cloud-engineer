@@ -34,7 +34,7 @@ export class ControlPlaneApiStack extends cdk.Stack {
     if (props.bedrockModelArns.length === 0) {
       throw new Error('bedrockModelArns must list the exact models the worker may invoke');
     }
-    const { table, bucket, gateProject } = props.data;
+    const { table, bucket, gateProject, bus } = props.data;
 
     const bundling: nodejs.BundlingOptions = {
       format: nodejs.OutputFormat.ESM,
@@ -66,6 +66,7 @@ export class ControlPlaneApiStack extends cdk.Stack {
           BUCKET_NAME: bucket.bucketName,
           BUILD_PROJECT: gateProject.projectName,
           MODEL_ID: props.modelId,
+          EVENT_BUS_NAME: bus.eventBusName,
           NODE_OPTIONS: '--enable-source-maps',
           ...extra.environment,
         },
@@ -93,6 +94,8 @@ export class ControlPlaneApiStack extends cdk.Stack {
       }),
     );
 
+    bus.grantPutEventsTo(worker);
+
     const workflow = new RunWorkflow(this, 'Workflow', { worker });
 
     const api = fn('Api', 'api', {
@@ -101,6 +104,7 @@ export class ControlPlaneApiStack extends cdk.Stack {
       environment: { STATE_MACHINE_ARN: workflow.stateMachine.stateMachineArn },
     });
     table.grantReadWriteData(api);
+    bus.grantPutEventsTo(api);
     bucket.grantReadWrite(api, 'runs/*');
     workflow.stateMachine.grantStartExecution(api);
     api.addToRolePolicy(

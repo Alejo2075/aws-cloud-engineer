@@ -9,6 +9,7 @@ import {
   DynamoTokenStore,
   S3WorkspaceStore,
   createCodeBuildGateRunner,
+  createEventPublisher,
   createS3ArtifactStore,
 } from '@cloud-engineer/providers';
 import { WorkflowEngine } from '@cloud-engineer/workflow';
@@ -22,6 +23,7 @@ export interface ControlPlaneEnv {
   buildProject: string;
   modelId: string;
   stateMachineArn?: string;
+  eventBusName?: string;
 }
 
 function need(name: string): string {
@@ -38,6 +40,7 @@ export function readEnv(): ControlPlaneEnv {
     buildProject: need('BUILD_PROJECT'),
     modelId: need('MODEL_ID'),
     ...(process.env.STATE_MACHINE_ARN ? { stateMachineArn: process.env.STATE_MACHINE_ARN } : {}),
+    ...(process.env.EVENT_BUS_NAME ? { eventBusName: process.env.EVENT_BUS_NAME } : {}),
   };
 }
 
@@ -62,7 +65,11 @@ export function buildDeps(env: ControlPlaneEnv) {
     projectName: env.buildProject,
   });
   const pipeline: PipelineDeps = {
-    engine: new WorkflowEngine(new DynamoRunStore(doc, env.table)),
+    engine: new WorkflowEngine(
+      new DynamoRunStore(doc, env.table),
+      undefined,
+      env.eventBusName ? createEventPublisher(env.region, env.eventBusName) : undefined,
+    ),
     root: '/tmp/cloud-engineer',
     provider: new BedrockProvider({ modelId: env.modelId, region: env.region }),
     artifacts: createS3ArtifactStore({ region: env.region, bucket: env.bucket }),

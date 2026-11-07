@@ -113,6 +113,12 @@ describe('ControlPlaneApiStack', () => {
     expect(env).not.toMatch(/AKIA|SECRET|PASSWORD|TOKEN/i);
   });
 
+  it('lets both functions publish only to the Cloud Engineer bus', () => {
+    const puts = statements(t).filter((s) => actionsOf(s).includes('events:PutEvents'));
+    expect(puts).toHaveLength(2);
+    for (const s of puts) expect(JSON.stringify(s.Resource)).not.toBe('"*"');
+  });
+
   it('refuses to be built without an explicit model allow-list', () => {
     const app = new cdk.App();
     const data = new ControlPlaneStack(app, 'Data');

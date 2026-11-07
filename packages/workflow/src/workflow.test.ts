@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { CloudEngineerError } from '@cloud-engineer/shared';
-import { InMemoryRunStore, WorkflowEngine, canTransition, planHash } from './index.js';
+import { DomainEventSchema, type DomainEvent } from '@cloud-engineer/contracts';
+import {
+  InMemoryRunStore,
+  WorkflowEngine,
+  canTransition,
+  planHash,
+  type EventPublisher,
+} from './index.js';
 
 const engine = () => new WorkflowEngine(new InMemoryRunStore());
 
@@ -114,5 +121,88 @@ describe('input requests', () => {
     expect(types).toEqual(
       expect.arrayContaining(['InputRequested', 'InputProvided', 'RunCancelled']),
     );
+  });
+});
+
+describe('domain events', () => {
+  const sha = 'a'.repeat(64);
+  const ref = (kind: 'blueprint' | 'plan' | 'manifest') => ({
+    kind,
+    uri: `file:///x/${kind}`,
+    sha256: sha,
+    createdAt: new Date().toISOString(),
+  });
+
+  function withPublisher(fail = false) {
+    const events: DomainEvent[] = [];
+    const publisher: EventPublisher = {
+      publish: async (e) => {
+        if (fail) throw new Error('bus down');
+        events.push(e);
+      },
+    };
+    return {
+      events,
+      engine: new WorkflowEngine(new InMemoryRunStore(), () => new Date(), publisher),
+    };
+  }
+
+  it('publishes schema-valid events for the lifecycle moments consumers care about', async () => {
+    const { events, engine } = withPublisher();
+    const run = await engine.createRun({ prompt: 'x', region: 'us-east-1' });
+    await engine.attachArtifact(run.runId, ref('blueprint'));
+    for (const stage of [
+      'INTAKE',
+      'REQUIREMENTS',
+      'DESIGN',
+      'PLAN',
+      'GENERATE',
+      'BUILD',
+      'TEST',
+    ] as const) {
+      await engine.transition(run.runId, stage);
+    }
+    await engine.attachArtifact(run.runId, ref('plan'));
+    expect(events.map((e) => e.type)).toEqual([
+      'RunCreated',
+      'BlueprintPublished',
+      'BuildCompleted',
+      'DeploymentApprovalRequested',
+    ]);
+    for (const e of events) {
+      expect(DomainEventSchema.parse(e)).toEqual(e);
+      expect(e.runId).toBe(run.runId);
+      expect(e.correlationId).toBe(run.correlationId);
+    }
+    expect(events[1]!.artifacts).toEqual([{ kind: 'blueprint', sha256: sha }]);
+    expect(new Set(events.map((e) => e.id)).size).toBe(events.length);
+  });
+
+  it('reports a failed gate as TestsFailed, and ignores audit entries that are not public events', async () => {
+    const { events, engine } = withPublisher();
+    const run = await engine.createRun({ prompt: 'x', region: 'us-east-1' });
+    for (const stage of [
+      'INTAKE',
+      'REQUIREMENTS',
+      'DESIGN',
+      'PLAN',
+      'GENERATE',
+      'BUILD',
+    ] as const) {
+      await engine.transition(run.runId, stage);
+    }
+    await engine.fail(run.runId, 'npm test failed');
+    expect(events.map((e) => e.type)).toEqual(['RunCreated', 'TestsFailed']);
+    expect(events[1]!.stage).toBe('BUILD');
+  });
+
+  it('never fails or rolls back a transition when the bus is down', async () => {
+    const { engine } = withPublisher(true);
+    const run = await engine.createRun({ prompt: 'x', region: 'us-east-1' });
+    expect((await engine.transition(run.runId, 'INTAKE')).stage).toBe('INTAKE');
+    expect((await engine.listEvents(run.runId)).map((e) => e.type)).toEqual([
+      'RunCreated',
+      'StageChanged',
+    ]);
   });
 });
