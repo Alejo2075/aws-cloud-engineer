@@ -8,7 +8,7 @@ frontend (`frontend/`) served from a private S3 bucket through CloudFront.
 
 - **Booking** (`/bookings`): `guestName` (string, required), `partySize` (number, required), `date` (string, required)
 
-Each entity exposes `GET/POST /<name>s` and `GET/DELETE /<name>s/{id}`. Items are scoped to the
+Each entity exposes `GET/POST /<name>s` and `GET/PUT/DELETE /<name>s/{id}` (PUT replaces the declared fields; `id` and `createdAt` are kept). Items are scoped to the
 authenticated Cognito user (`sub`).
 
 ## Commands
