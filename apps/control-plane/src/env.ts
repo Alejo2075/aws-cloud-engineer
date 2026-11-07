@@ -8,6 +8,7 @@ import {
   DynamoRunStore,
   DynamoTokenStore,
   S3WorkspaceStore,
+  createCodeBuildDeployer,
   createCodeBuildGateRunner,
   createEventPublisher,
   createS3ArtifactStore,
@@ -24,6 +25,7 @@ export interface ControlPlaneEnv {
   modelId: string;
   stateMachineArn?: string;
   eventBusName?: string;
+  deploy?: { projects: Record<string, string>; roleName: string; externalId?: string };
 }
 
 function need(name: string): string {
@@ -40,20 +42,31 @@ export function readEnv(): ControlPlaneEnv {
     buildProject: need('BUILD_PROJECT'),
     modelId: need('MODEL_ID'),
     ...(process.env.STATE_MACHINE_ARN ? { stateMachineArn: process.env.STATE_MACHINE_ARN } : {}),
+    ...(process.env.DEPLOY_PROJECTS
+      ? {
+          deploy: {
+            projects: JSON.parse(process.env.DEPLOY_PROJECTS) as Record<string, string>,
+            roleName: need('DEPLOY_ROLE_NAME'),
+            ...(process.env.DEPLOY_EXTERNAL_ID
+              ? { externalId: process.env.DEPLOY_EXTERNAL_ID }
+              : {}),
+          },
+        }
+      : {}),
     ...(process.env.EVENT_BUS_NAME ? { eventBusName: process.env.EVENT_BUS_NAME } : {}),
   };
 }
 
-/** Deployment from the control plane is deliberately not available yet (see docs/security-model.md). */
+/** Used unless the stack was synthesized with deploy target accounts (see docs/security-model.md). */
 const noDeployer: DeployDeps = {
   callerAccount: async () => {
     throw new CloudEngineerError(
       'BLOCKED',
-      'Deploying from the control plane is not implemented: it needs a CodeBuild deployer that assumes a scoped role in the target account',
+      'Deployment is disabled: synthesize the control plane with -c deployAccounts=<account ids> to enable the CodeBuild deployer',
     );
   },
   exec: async () => {
-    throw new CloudEngineerError('BLOCKED', 'Deploying from the control plane is not implemented');
+    throw new CloudEngineerError('BLOCKED', 'Deployment is disabled in this control plane');
   },
 };
 
@@ -75,7 +88,9 @@ export function buildDeps(env: ControlPlaneEnv) {
     artifacts: createS3ArtifactStore({ region: env.region, bucket: env.bucket }),
     // The pipeline passes <root>/runs/<runId>/project.
     gates: (dir) => gates.run(dir, basename(dirname(dir))),
-    deployDeps: noDeployer,
+    deployDeps: env.deploy
+      ? createCodeBuildDeployer(env.region, env.bucket, env.deploy)
+      : noDeployer,
   };
   const tokens: TokenStore = new DynamoTokenStore(doc, env.table);
   const workspace = new S3WorkspaceStore(new S3Client({ region: env.region }), env.bucket);

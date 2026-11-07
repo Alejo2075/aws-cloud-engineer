@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
+import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpIamAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -17,7 +19,25 @@ export interface ControlPlaneApiProps extends cdk.StackProps {
   modelId: string;
   /** Exact ARNs the worker may invoke (foundation model and/or inference profile). */
   bedrockModelArns: string[];
+  /**
+   * Accounts the control plane may deploy to. Omit to leave deployment disabled (the worker's
+   * deployer then refuses). Each account must contain `deployRoleName`, trusting the deployer's role.
+   */
+  deployTargetAccountIds?: string[];
+  deployRoleName?: string;
+  /** Optional external id the target role requires on AssumeRole. */
+  deployExternalId?: string;
 }
+
+/** The CDK CLI the deployer build runs is the exact version the local deployer pins. */
+const CDK_CLI_VERSION = (
+  JSON.parse(
+    readFileSync(
+      fileURLToPath(new URL('../../packages/deployment/package.json', import.meta.url)),
+      'utf8',
+    ),
+  ) as { dependencies: Record<string, string> }
+).dependencies['aws-cdk']!;
 
 const entry = (name: string) =>
   fileURLToPath(new URL(`../../apps/control-plane/src/${name}.ts`, import.meta.url));
@@ -95,6 +115,80 @@ export class ControlPlaneApiStack extends cdk.Stack {
     );
 
     bus.grantPutEventsTo(worker);
+
+    const deployRoleName = props.deployRoleName ?? 'CloudEngineerDeploy';
+    const targets = props.deployTargetAccountIds ?? [];
+    // One project and one role per target account: a build can assume only its own account's role,
+    // so a compromised or confused build cannot reach another listed account.
+    const deployers: Record<string, codebuild.Project> = {};
+    for (const account of targets) {
+      const deployerRole = new iam.Role(this, `DeployerRole${account}`, {
+        assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
+      });
+      const project = new codebuild.Project(this, `Deployer${account}`, {
+        role: deployerRole,
+        timeout: cdk.Duration.minutes(45),
+        environment: {
+          buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2023_5,
+          computeType: codebuild.ComputeType.MEDIUM,
+        },
+        source: codebuild.Source.s3({ bucket, path: 'build-input/' }),
+        encryptionKey: props.data.key,
+        buildSpec: codebuild.BuildSpec.fromObject({
+          version: '0.2',
+          phases: {
+            install: {
+              commands: [
+                // The CDK CLI is installed outside the uploaded assembly, without lifecycle scripts,
+                // so nothing in the assembly (.npmrc, node_modules, scripts) can influence it.
+                'mkdir -p /tmp/cdk && cd /tmp/cdk && npm init -y >/dev/null',
+                `cd /tmp/cdk && npm install --ignore-scripts --no-audit --no-fund --registry https://registry.npmjs.org aws-cdk@${CDK_CLI_VERSION}`,
+              ],
+            },
+            build: {
+              commands: [
+                // Credentials for the target account exist only inside this build, via AssumeRole.
+                'read -r AK SK ST <<< "$(aws sts assume-role --role-arn "$TARGET_ROLE_ARN" --role-session-name "ce-$RUN_ID" --duration-seconds 3600 ${EXTERNAL_ID:+--external-id "$EXTERNAL_ID"} --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text)"',
+                'export AWS_ACCESS_KEY_ID="$AK" AWS_SECRET_ACCESS_KEY="$SK" AWS_SESSION_TOKEN="$ST"',
+                'unset AK SK ST',
+                // From here on the CLI must use only the assumed-role credentials, never the build role.
+                'unset AWS_CONTAINER_CREDENTIALS_RELATIVE_URI AWS_CONTAINER_CREDENTIALS_FULL_URI AWS_CONTAINER_AUTHORIZATION_TOKEN',
+                // Refuse to deploy unless the credentials really belong to the approved account.
+                '[ "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT" ]',
+                '/tmp/cdk/node_modules/.bin/cdk deploy "$STACK_NAME" --app "$CODEBUILD_SRC_DIR" --require-approval never --outputs-file "$CODEBUILD_SRC_DIR/cdk-outputs.json"',
+              ],
+            },
+          },
+          artifacts: { files: ['cdk-outputs.json'] },
+        }),
+      });
+      bucket.grantRead(project, 'build-input/*');
+      bucket.grantWrite(project, 'build-output/*');
+      deployerRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ['sts:AssumeRole'],
+          resources: [`arn:aws:iam::${account}:role/${deployRoleName}`],
+        }),
+      );
+      worker.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['codebuild:StartBuild', 'codebuild:BatchGetBuilds', 'codebuild:StopBuild'],
+          resources: [project.projectArn],
+        }),
+      );
+      deployers[account] = project;
+    }
+    if (targets.length > 0) {
+      worker.addEnvironment(
+        'DEPLOY_PROJECTS',
+        cdk.Stack.of(this).toJsonString(
+          Object.fromEntries(Object.entries(deployers).map(([a, p]) => [a, p.projectName])),
+        ),
+      );
+      worker.addEnvironment('DEPLOY_ROLE_NAME', deployRoleName);
+      if (props.deployExternalId)
+        worker.addEnvironment('DEPLOY_EXTERNAL_ID', props.deployExternalId);
+    }
 
     const workflow = new RunWorkflow(this, 'Workflow', { worker });
 

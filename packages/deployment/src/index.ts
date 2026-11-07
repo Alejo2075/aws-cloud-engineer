@@ -169,12 +169,25 @@ export function buildDeployArgs(plan: DeploymentPlan, outputsFile: string): stri
   ];
 }
 
+/** What an out-of-process deployer needs to know about the approved plan. */
+export interface DeployContext {
+  runId: string;
+  stackName: string;
+  accountId: string;
+  region: string;
+}
+
 export interface DeployDeps {
-  callerAccount(region: string): Promise<string>;
+  /**
+   * The account the credentials used for the deployment belong to. `expectedAccountId` is the plan's
+   * account, for deployers that obtain credentials per target (they must still verify it).
+   */
+  callerAccount(region: string, expectedAccountId?: string): Promise<string>;
   /** Runs the deploy for the assembly in `assemblyDir` (a directory named cdk.out's parent contents). */
   exec(
     args: string[],
     assemblyDir: string,
+    ctx?: DeployContext,
   ): Promise<{
     exitCode: number | null;
     log: string;
@@ -267,14 +280,19 @@ export async function deploy(
   ) {
     throw new CloudEngineerError('APPROVAL_MISMATCH', 'Cloud assembly changed since the plan');
   }
-  const account = await deps.callerAccount(plan.region);
+  const account = await deps.callerAccount(plan.region, plan.accountId);
   if (account !== plan.accountId) {
     throw new CloudEngineerError(
       'APPROVAL_MISMATCH',
       `Credentials belong to ${account}, plan targets ${plan.accountId}`,
     );
   }
-  const res = await deps.exec(buildDeployArgs(plan, 'cdk-outputs.json'), assemblyDir);
+  const res = await deps.exec(buildDeployArgs(plan, 'cdk-outputs.json'), assemblyDir, {
+    runId: plan.runId,
+    stackName: plan.stackName,
+    accountId: plan.accountId,
+    region: plan.region,
+  });
   if (res.exitCode !== 0) return { status: 'failed', log: res.log.slice(-4000) };
   return { status: 'deployed', outputs: res.outputs?.[plan.stackName] ?? {} };
 }

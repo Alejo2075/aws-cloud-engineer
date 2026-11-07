@@ -9,11 +9,14 @@ const data = new ControlPlaneStack(app, 'CloudEngineerControlPlane');
 //   cdk synth -c modelId=<id> -c bedrockModelArns=<arn>[,<arn>...]
 const modelId = app.node.tryGetContext('modelId') as string | undefined;
 const arns = (app.node.tryGetContext('bedrockModelArns') as string | undefined)?.split(',');
+// Optional: -c deployAccounts=<12-digit>[,<12-digit>...] enables CodeBuild deployments to those accounts.
+const accounts = (app.node.tryGetContext('deployAccounts') as string | undefined)?.split(',');
 if (modelId && arns?.length) {
   new ControlPlaneApiStack(app, 'CloudEngineerControlPlaneApi', {
     data,
     modelId,
     bedrockModelArns: arns,
+    ...(accounts?.length ? { deployTargetAccountIds: accounts } : {}),
   });
 }
 app.synth();

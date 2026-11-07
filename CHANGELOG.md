@@ -8,6 +8,8 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 
 - Domain events (`RunCreated`, `BlueprintPublished`, `BuildCompleted`, `TestsFailed`, `DeploymentApprovalRequested`, `DeploymentCompleted`, `VerificationFailed`, `SystemHandoffPublished`): derived from the audit trail, validated by a published JSON Schema (`docs/integration/domain-event.schema.json`), and published best-effort through an `EventPublisher` port (failures never affect a run). `EventBridgePublisher` and wiring into the control-plane functions (`EVENT_BUS_NAME`, `events:PutEvents` on the Cloud Engineer bus only). Verified with fakes and synth; nothing was published to a real bus. `RequirementsApproved` is not emitted because no requirements-approval step exists.
 
+- `CodeBuildDeployer` and opt-in per-account `Deployer` CodeBuild projects and roles in `ControlPlaneApiStack` (`-c deployAccounts=...`): uploads the approved assembly (all files), assumes `CloudEngineerDeploy` of that one account inside the build, drops the build role's credentials, verifies the account with `sts:GetCallerIdentity`, and runs the pinned CDK CLI installed outside the assembly with `--ignore-scripts`; outputs are read back from S3. `DeployDeps` gains an optional expected account and deploy context. Verified with fakes and synth only; never run against AWS. Without the option the control plane still refuses to deploy.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added

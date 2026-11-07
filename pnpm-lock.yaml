@@ -216,6 +216,9 @@ importers:
       '@cloud-engineer/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@cloud-engineer/deployment':
+        specifier: workspace:*
+        version: link:../deployment
       '@cloud-engineer/planning':
         specifier: workspace:*
         version: link:../planning

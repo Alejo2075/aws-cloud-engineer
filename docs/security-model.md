@@ -26,9 +26,31 @@ API Gateway and Cognito in the deployment region), HSTS, `X-Content-Type-Options
 API CORS allows only the site's CloudFront origin. The client writes DOM with `textContent`, never `innerHTML`.
 Known exception: the site deployment role needs `cloudfront:CreateInvalidation` on `*` (a CDK requirement).
 
+## Deploy role you must create (control-plane deployments)
+
+In each target account, create the role `CloudEngineerDeploy` yourself. Cloud Engineer never creates it. Trust only the deployer build role and require an external id:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::<control-plane-account>:role/<DeployerRole name from the stack>"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": { "StringEquals": { "sts:ExternalId": "<your external id>" } }
+    }
+  ]
+}
+```
+
+Grant it only what the generated stacks need (and `sts:AssumeRole` on the account's CDK bootstrap roles). The account must already be CDK-bootstrapped, which creates resources there and is your decision. Its permissions bound what any approved plan can do. Unverified against a real account.
+
 ## Not yet implemented
 
-- The control-plane worker has no deployment capability: `apps/control-plane` injects a deployer that refuses, so approvals can be collected through the API but deployments still run only from the local CLI. A CodeBuild deployer assuming a narrowly scoped role in the target account is not built.
+- Deployment from the control plane is opt-in and unverified: synthesizing with `-c deployAccounts=<ids>` adds one CodeBuild `Deployer` project and role **per listed account**; each role may only `sts:AssumeRole` into `arn:aws:iam::<id>:role/CloudEngineerDeploy` of its own account. Without the option the worker's deployer refuses (BLOCKED). The assembly is hash-checked and approved before upload. In the build, the pinned CDK CLI is installed outside the uploaded assembly with `--ignore-scripts` (so an `.npmrc`, `node_modules` or scripts inside the assembly cannot influence it), the build role's container credentials are unset after `AssumeRole`, and the account is verified with `sts:GetCallerIdentity` before `cdk deploy --app <assembly>` runs. `cdk deploy` on an assembly directory does not execute code from it, and `node_modules` inside asset bundles are legitimate content, so they are not stripped.
 - `ControlPlaneApiStack` grants `states:SendTaskSuccess` on `*` (the action has no resource-level permissions) to the API function, and Bedrock access only to the model ARNs given at synth time. API access is IAM-authenticated; there is no per-user authorization beyond who may sign requests.
 
 - The CodeBuild gate role can read only `build-input/*` and write only `build-output/*` in the artifact bucket,
