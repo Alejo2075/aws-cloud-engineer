@@ -14,10 +14,12 @@ import {
 } from '@cloud-engineer/deployment';
 import { generateProject, hashFiles, writeProject } from '@cloud-engineer/generation';
 import {
+  assertSafeRemote,
   buildManifest,
   exportProject,
   initGitRepository,
   manifestResources,
+  pushRepository,
 } from '@cloud-engineer/handoff';
 import {
   checkTraceability,
@@ -467,7 +469,7 @@ export async function exportRun(
   d: PipelineDeps,
   runId: string,
   output: string,
-  opts: { git?: boolean } = {},
+  opts: { git?: boolean; push?: string } = {},
 ): Promise<string[]> {
   const run = await d.engine.getRun(runId);
   const manifestRef = run.artifacts.findLast((a) => a.kind === 'manifest');
@@ -475,6 +477,13 @@ export async function exportRun(
     ? JSON.parse(await readFile(join(runDir(d.root, runId), 'artifacts', 'manifest.json'), 'utf8'))
     : undefined;
   const written = await exportProject(projectDir(d.root, runId), output, manifest);
-  if (opts.git) written.push(`git:${await initGitRepository(output)}`);
+  if (opts.git || opts.push) {
+    if (opts.push) assertSafeRemote(opts.push);
+    written.push(`git:${await initGitRepository(output)}`);
+    if (opts.push) {
+      await pushRepository(output, opts.push);
+      written.push(`pushed:${opts.push}`);
+    }
+  }
   return written;
 }

@@ -6,6 +6,7 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 
 ### Added
 
+- `export --push <url>` pushes the exported repository as `main` to an https/ssh/file remote using your own git credentials. URLs with embedded credentials are rejected, nothing is force-pushed, and a diverged remote makes the export fail. Tested against a local bare repository only (no GitHub).
 - `NEEDS_INPUT` flow: the planner may ask up to 3 blocking questions in total; the run pauses at its stage, `respond` records the answers as a persisted `decisions.json` and continues. After the budget the model must use documented defaults. Cancel works while waiting.
 - `export --git` initializes a local git repository with one commit (ignores user git config and hooks; refuses an existing repository). No remote push.
 - Generated APIs support `PUT /<name>s/{id}` (replaces declared fields, keeps `id`/`createdAt`, sets `updatedAt`; 404 for other users' items).
