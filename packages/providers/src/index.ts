@@ -46,3 +46,4 @@ export * from './s3-artifacts.js';
 export * from './codebuild-gates.js';
 export * from './sfn-tokens.js';
 export * from './workspace-store.js';
+export * from './event-publisher.js';

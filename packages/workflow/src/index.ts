@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { CloudEngineerError } from '@cloud-engineer/shared';
+import { toDomainEvent, type EventPublisher } from './domain-events.js';
 import {
   RUN_STAGES,
   type ArtifactRef,
@@ -75,6 +76,7 @@ export class WorkflowEngine {
   constructor(
     private readonly store: RunStore,
     private readonly now: () => Date = () => new Date(),
+    private readonly events?: EventPublisher,
   ) {}
 
   async createRun(input: CreateRunInput, actor = 'local'): Promise<Run> {
@@ -260,14 +262,34 @@ export class WorkflowEngine {
     return updated;
   }
 
-  private audit(run: Run, type: string, actor: string, detail?: Record<string, unknown>) {
-    return this.store.appendEvent({
+  private async audit(run: Run, type: string, actor: string, detail?: Record<string, unknown>) {
+    const event = {
       runId: run.runId,
       type,
       at: this.now().toISOString(),
       actor,
       ...(detail ? { detail } : {}),
-    });
+    };
+    await this.store.appendEvent(event);
+    // Publishing is best-effort: the audit trail above is the source of truth, so a broken bus
+    // must never fail or roll back a run transition.
+    const domain = toDomainEvent(run, event);
+    if (domain && this.events) {
+      try {
+        await this.events.publish(domain);
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            level: 'warn',
+            message: 'domain event not published',
+            type: domain.type,
+            runId: run.runId,
+            error: String(err),
+          }),
+        );
+      }
+    }
   }
 }
 export * from './file-store.js';
+export * from './domain-events.js';

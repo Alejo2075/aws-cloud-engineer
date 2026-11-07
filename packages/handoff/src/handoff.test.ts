@@ -12,6 +12,7 @@ import {
   assertSafeRemote,
   initGitRepository,
   pushRepository,
+  domainEventJsonSchema,
   manifestJsonSchema,
   manifestResources,
 } from './index.js';
@@ -66,6 +67,13 @@ describe('manifest', () => {
       new URL('../../../docs/integration/cloud-system-manifest.schema.json', import.meta.url),
     );
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(manifestJsonSchema());
+  });
+
+  it('keeps the published domain event schema in sync', async () => {
+    const file = fileURLToPath(
+      new URL('../../../docs/integration/domain-event.schema.json', import.meta.url),
+    );
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(domainEventJsonSchema());
   });
 });
 

@@ -28,4 +28,6 @@ Allowed non-linear moves: `BUILD|TEST → GENERATE` (repair), `AWAITING_APPROVAL
 | DEPLOY/VERIFY     | Deploy approved assembly; unauthenticated calls must get 401 | `test-report`               |
 | HANDOFF           | Manifest built with `verifiedAt` only after VERIFY           | `manifest`                  |
 
+Domain events (published best-effort to EventBridge when `EVENT_BUS_NAME` is set; schema in `docs/integration/domain-event.schema.json`; delivery is at-least-once, so consumers must dedupe on `id`): RunCreated, BlueprintPublished, BuildCompleted, TestsFailed, DeploymentApprovalRequested, DeploymentCompleted, VerificationFailed, SystemHandoffPublished.
+
 Audit trail: `runs/<id>/events.jsonl` (RunCreated, StageChanged, ArtifactAttached, DeploymentApproved, RunFailed, RunCancelled).

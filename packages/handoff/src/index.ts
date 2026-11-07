@@ -3,7 +3,11 @@ import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
-import { CloudSystemManifestSchema, type CloudSystemManifest } from '@cloud-engineer/contracts';
+import {
+  CloudSystemManifestSchema,
+  DomainEventSchema,
+  type CloudSystemManifest,
+} from '@cloud-engineer/contracts';
 import { CloudEngineerError } from '@cloud-engineer/shared';
 
 export const MANIFEST_SCHEMA_VERSION = '1.0.0';
@@ -13,6 +17,14 @@ export function manifestJsonSchema(): Record<string, unknown> {
     $id: 'https://github.com/Alejo2075/aws-cloud-engineer/docs/integration/cloud-system-manifest.schema.json',
     title: 'CloudSystemManifest',
     ...z.toJSONSchema(CloudSystemManifestSchema),
+  };
+}
+
+export function domainEventJsonSchema(): Record<string, unknown> {
+  return {
+    $id: 'https://github.com/Alejo2075/aws-cloud-engineer/docs/integration/domain-event.schema.json',
+    title: 'CloudEngineerDomainEvent',
+    ...z.toJSONSchema(DomainEventSchema),
   };
 }
 

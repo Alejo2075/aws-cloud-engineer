@@ -4,6 +4,7 @@ import { WorkflowEngine } from '@cloud-engineer/workflow';
 import {
   DynamoRunStore,
   DynamoTokenStore,
+  EventBridgePublisher,
   S3ArtifactStore,
   SfnTaskCallbacks,
   SfnWorkflowStarter,
@@ -215,5 +216,46 @@ describe('SfnWorkflowStarter', () => {
     fail = 'AccessDeniedException';
     await expect(starter.start('run-1')).rejects.toThrow();
     await expect(starter.stop('../x', 'c')).rejects.toThrow(/Invalid run id/);
+  });
+});
+
+describe('EventBridgePublisher', () => {
+  const event = {
+    schemaVersion: '1.0.0' as const,
+    id: 'e1',
+    type: 'RunCreated' as const,
+    runId: 'run-1',
+    correlationId: 'c1',
+    at: '2026-11-07T00:00:00.000Z',
+    stage: 'CREATED' as const,
+  };
+
+  it('puts one entry with the event type as detail type', async () => {
+    const sent: unknown[] = [];
+    const pub = new EventBridgePublisher(
+      { send: async (c) => (sent.push((c as { input: unknown }).input), { FailedEntryCount: 0 }) },
+      'bus',
+    );
+    await pub.publish(event);
+    expect(sent).toEqual([
+      {
+        Entries: [
+          {
+            EventBusName: 'bus',
+            Source: 'cloud-engineer',
+            DetailType: 'RunCreated',
+            Detail: JSON.stringify(event),
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('throws when EventBridge reports a failed entry', async () => {
+    const pub = new EventBridgePublisher(
+      { send: async () => ({ FailedEntryCount: 1, Entries: [{ ErrorMessage: 'denied' }] }) },
+      'bus',
+    );
+    await expect(pub.publish(event)).rejects.toThrow(/denied/);
   });
 });

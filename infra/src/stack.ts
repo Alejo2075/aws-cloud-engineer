@@ -17,6 +17,7 @@ export class ControlPlaneStack extends cdk.Stack {
   readonly table: dynamodb.Table;
   readonly bucket: s3.Bucket;
   readonly gateProject: codebuild.Project;
+  readonly bus: events.EventBus;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -87,6 +88,7 @@ export class ControlPlaneStack extends cdk.Stack {
     this.table = table;
     this.bucket = bucket;
     this.gateProject = project;
+    this.bus = bus;
 
     cdk.Tags.of(this).add('ManagedBy', 'cloud-engineer');
     new cdk.CfnOutput(this, 'RunsTableName', { value: table.tableName });
