@@ -4,6 +4,8 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-07
+
 ### Added
 
 - Control-plane entrypoints (`apps/control-plane`: worker and HTTP API Lambdas), `createApi` (create/list/status/approve/respond/cancel; IAM-authenticated, strict input validation, approvals bound to plan hash + environment), `SfnWorkflowStarter` (one execution per run id, idempotent start) and `ControlPlaneApiStack` (workflow + worker + HTTP API with scoped IAM; opt-in in `infra/src/app.ts`). Verified by synth and assertions only. **The control-plane worker cannot deploy applications: its deployer refuses until a scoped CodeBuild deployer exists.**
