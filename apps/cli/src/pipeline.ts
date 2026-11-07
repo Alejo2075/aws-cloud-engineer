@@ -13,7 +13,12 @@ import {
   type DeploymentPlan,
 } from '@cloud-engineer/deployment';
 import { generateProject, hashFiles, writeProject } from '@cloud-engineer/generation';
-import { buildManifest, exportProject, manifestResources } from '@cloud-engineer/handoff';
+import {
+  buildManifest,
+  exportProject,
+  initGitRepository,
+  manifestResources,
+} from '@cloud-engineer/handoff';
 import { checkTraceability, planBlueprint, type ModelProvider } from '@cloud-engineer/planning';
 import { ApplicationBlueprintSchema, type ApplicationBlueprint } from '@cloud-engineer/contracts';
 import { CloudEngineerError } from '@cloud-engineer/shared';
@@ -387,11 +392,18 @@ export async function approveAndDeploy(
   return { run, deployed: true, verified: true, detail: apiUrl };
 }
 
-export async function exportRun(d: PipelineDeps, runId: string, output: string): Promise<string[]> {
+export async function exportRun(
+  d: PipelineDeps,
+  runId: string,
+  output: string,
+  opts: { git?: boolean } = {},
+): Promise<string[]> {
   const run = await d.engine.getRun(runId);
   const manifestRef = run.artifacts.findLast((a) => a.kind === 'manifest');
   const manifest = manifestRef
     ? JSON.parse(await readFile(join(runDir(d.root, runId), 'artifacts', 'manifest.json'), 'utf8'))
     : undefined;
-  return exportProject(projectDir(d.root, runId), output, manifest);
+  const written = await exportProject(projectDir(d.root, runId), output, manifest);
+  if (opts.git) written.push(`git:${await initGitRepository(output)}`);
+  return written;
 }

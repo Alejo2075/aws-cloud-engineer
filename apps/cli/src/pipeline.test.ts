@@ -146,6 +146,11 @@ describe('pipeline', () => {
       expect.arrayContaining(['src', 'lib', 'cloud-system-manifest.json']),
     );
     expect(JSON.stringify(manifest)).not.toMatch(/AKIA|secret/i);
+
+    const gitOut = join(root, 'export-git');
+    const written = await exportRun(d, run.runId, gitOut, { git: true });
+    expect(written.at(-1)).toMatch(/^git:[0-9a-f]{40}$/);
+    expect(await readdir(gitOut)).toContain('.git');
   });
 
   it('refuses a wrong plan hash and never calls the deployer', async () => {

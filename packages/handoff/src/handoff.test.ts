@@ -7,6 +7,7 @@ import {
   assertNoSecrets,
   buildManifest,
   exportProject,
+  initGitRepository,
   manifestJsonSchema,
   manifestResources,
 } from './index.js';
@@ -76,5 +77,16 @@ describe('exportProject', () => {
     await exportProject(src, join(out, 'app'), buildManifest(input));
     const names = await readdir(join(out, 'app'));
     expect(names.sort()).toEqual(['cloud-system-manifest.json', 'src']);
+  });
+});
+
+describe('initGitRepository', () => {
+  it('creates one commit with the exported files and refuses an existing repository', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ce-git-'));
+    dirs.push(dir);
+    await writeFile(join(dir, 'a.txt'), 'x');
+    const rev = await initGitRepository(dir);
+    expect(rev).toMatch(/^[0-9a-f]{40}$/);
+    await expect(initGitRepository(dir)).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 });

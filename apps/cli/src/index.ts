@@ -183,8 +183,9 @@ program
 program
   .command('export <runId>')
   .requiredOption('--output <dir>', 'destination directory')
-  .action(async (runId: string, o: { output: string }) => {
-    const written = await exportRun(deps(), runId, resolve(o.output));
+  .option('--git', 'initialize a git repository with one commit')
+  .action(async (runId: string, o: { output: string; git?: boolean }) => {
+    const written = await exportRun(deps(), runId, resolve(o.output), { git: o.git ?? false });
     console.log(`Exported to ${resolve(o.output)} (${written.join(', ')})`);
   });
 
