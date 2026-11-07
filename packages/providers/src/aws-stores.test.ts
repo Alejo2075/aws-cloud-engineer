@@ -6,6 +6,7 @@ import {
   DynamoTokenStore,
   S3ArtifactStore,
   SfnTaskCallbacks,
+  SfnWorkflowStarter,
   type DocClient,
 } from './index.js';
 
@@ -182,5 +183,37 @@ describe('DynamoTokenStore and SfnTaskCallbacks', () => {
     });
     await cb.success('tok', { approved: true });
     expect(sent).toEqual([{ taskToken: 'tok', output: '{"approved":true}' }]);
+  });
+});
+
+describe('SfnWorkflowStarter', () => {
+  const arn = 'arn:aws:states:us-east-1:123456789012:stateMachine:Flow';
+
+  it('names the execution after the run, tolerates a repeated start, and stops by derived ARN', async () => {
+    const sent: { name: string; input: Record<string, unknown> }[] = [];
+    let fail: string | undefined;
+    const starter = new SfnWorkflowStarter(
+      {
+        send: async (c) => {
+          const cmd = c as { constructor: { name: string }; input: Record<string, unknown> };
+          sent.push({ name: cmd.constructor.name, input: cmd.input });
+          if (fail) throw Object.assign(new Error(fail), { name: fail });
+          return {};
+        },
+      },
+      arn,
+    );
+    await starter.start('run-1');
+    expect(sent[0]!.input).toMatchObject({ name: 'run-1', input: '{"runId":"run-1"}' });
+    fail = 'ExecutionAlreadyExists';
+    await expect(starter.start('run-1')).resolves.toBeUndefined();
+    fail = undefined;
+    await starter.stop('run-1', 'cancelled');
+    expect(sent.at(-1)!.input.executionArn).toBe(
+      'arn:aws:states:us-east-1:123456789012:execution:Flow:run-1',
+    );
+    fail = 'AccessDeniedException';
+    await expect(starter.start('run-1')).rejects.toThrow();
+    await expect(starter.stop('../x', 'c')).rejects.toThrow(/Invalid run id/);
   });
 });

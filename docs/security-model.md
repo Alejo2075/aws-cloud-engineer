@@ -28,6 +28,9 @@ Known exception: the site deployment role needs `cloudfront:CreateInvalidation` 
 
 ## Not yet implemented
 
+- The control-plane worker has no deployment capability: `apps/control-plane` injects a deployer that refuses, so approvals can be collected through the API but deployments still run only from the local CLI. A CodeBuild deployer assuming a narrowly scoped role in the target account is not built.
+- `ControlPlaneApiStack` grants `states:SendTaskSuccess` on `*` (the action has no resource-level permissions) to the API function, and Bedrock access only to the model ARNs given at synth time. API access is IAM-authenticated; there is no per-user authorization beyond who may sign requests.
+
 - The CodeBuild gate role can read only `build-input/*` and write only `build-output/*` in the artifact bucket,
   never `runs/*`. `CodeBuildGateRunner` places one run's source under `build-input/<runId>/`, but the role can read
   every run's prefix there (per-run scoping with a session policy is not implemented). It can also list key names in

@@ -1,5 +1,10 @@
 import { DeleteCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { SFNClient, SendTaskSuccessCommand } from '@aws-sdk/client-sfn';
+import {
+  SFNClient,
+  SendTaskSuccessCommand,
+  StartExecutionCommand,
+  StopExecutionCommand,
+} from '@aws-sdk/client-sfn';
 import { CloudEngineerError } from '@cloud-engineer/shared';
 import type { DocClient } from './dynamo-store.js';
 
@@ -64,4 +69,57 @@ export class SfnTaskCallbacks {
 
 export function createSfnTaskCallbacks(region: string): SfnTaskCallbacks {
   return new SfnTaskCallbacks(new SFNClient({ region }));
+}
+
+/**
+ * Starts one execution per run, named after the run id: Step Functions treats a repeated start with
+ * the same name and input as the same execution, so a retried API call cannot run a run twice.
+ */
+export class SfnWorkflowStarter {
+  constructor(
+    private readonly client: DocClient,
+    private readonly stateMachineArn: string,
+  ) {}
+
+  private executionArn(runId: string): string {
+    if (!RUN_ID.test(runId)) throw new CloudEngineerError('VALIDATION_FAILED', 'Invalid run id');
+    // arn:aws:states:<region>:<acct>:stateMachine:<name> -> ...:execution:<name>:<runId>
+    return this.stateMachineArn.replace(':stateMachine:', ':execution:') + `:${runId}`;
+  }
+
+  async start(runId: string): Promise<void> {
+    this.executionArn(runId);
+    try {
+      await this.client.send(
+        new StartExecutionCommand({
+          stateMachineArn: this.stateMachineArn,
+          name: runId,
+          input: JSON.stringify({ runId }),
+        }),
+      );
+    } catch (err) {
+      if ((err as { name?: string }).name !== 'ExecutionAlreadyExists') throw err;
+    }
+  }
+
+  async stop(runId: string, cause: string): Promise<void> {
+    try {
+      await this.client.send(
+        new StopExecutionCommand({
+          executionArn: this.executionArn(runId),
+          error: 'RunCancelled',
+          cause: cause.slice(0, 200),
+        }),
+      );
+    } catch (err) {
+      if ((err as { name?: string }).name !== 'ExecutionDoesNotExist') throw err;
+    }
+  }
+}
+
+export function createSfnWorkflowStarter(
+  region: string,
+  stateMachineArn: string,
+): SfnWorkflowStarter {
+  return new SfnWorkflowStarter(new SFNClient({ region }), stateMachineArn);
 }
