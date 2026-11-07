@@ -76,9 +76,8 @@ const make = (f: ReturnType<typeof fakes>, over = {}) =>
     s3: f.s3,
     codebuild: f.codebuild,
     bucket: 'bkt',
-    projectName: 'Deployer',
+    projects: { '123456789012': 'Deployer-123456789012' },
     roleName: 'CloudEngineerDeploy',
-    allowedAccounts: ['123456789012'],
     externalId: 'ext-1',
     pollMs: 1,
     sleep: async () => {},
@@ -100,6 +99,7 @@ describe('CodeBuildDeployer', () => {
     // Bundled dependencies inside assets must travel with the approved assembly.
     expect((f.s3Calls[0]!.input.Body as Buffer).includes('bundled dependency')).toBe(true);
     const start = f.cbCalls[0]!.input;
+    expect(start.projectName).toBe('Deployer-123456789012');
     expect(start.sourceLocationOverride).toBe('bkt/build-input/run-1/assembly.zip');
     expect(start.environmentVariablesOverride).toEqual(
       expect.arrayContaining([
@@ -161,7 +161,8 @@ describe('CodeBuildDeployer', () => {
 
   it('validates its configuration', () => {
     const f = fakes('SUCCEEDED');
-    expect(() => make(f, { allowedAccounts: [] })).toThrow(/allowedAccounts/);
+    expect(() => make(f, { projects: {} })).toThrow(/projects/);
+    expect(() => make(f, { projects: { nope: 'p' } })).toThrow(/projects/);
     expect(() => make(f, { roleName: 'bad/role' })).toThrow(/role name/);
   });
 });

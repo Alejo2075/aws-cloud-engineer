@@ -118,12 +118,14 @@ export class ControlPlaneApiStack extends cdk.Stack {
 
     const deployRoleName = props.deployRoleName ?? 'CloudEngineerDeploy';
     const targets = props.deployTargetAccountIds ?? [];
-    let deployer: codebuild.Project | undefined;
-    if (targets.length > 0) {
-      const deployerRole = new iam.Role(this, 'DeployerRole', {
+    // One project and one role per target account: a build can assume only its own account's role,
+    // so a compromised or confused build cannot reach another listed account.
+    const deployers: Record<string, codebuild.Project> = {};
+    for (const account of targets) {
+      const deployerRole = new iam.Role(this, `DeployerRole${account}`, {
         assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
       });
-      deployer = new codebuild.Project(this, 'Deployer', {
+      const project = new codebuild.Project(this, `Deployer${account}`, {
         role: deployerRole,
         timeout: cdk.Duration.minutes(45),
         environment: {
@@ -135,39 +137,55 @@ export class ControlPlaneApiStack extends cdk.Stack {
         buildSpec: codebuild.BuildSpec.fromObject({
           version: '0.2',
           phases: {
+            install: {
+              commands: [
+                // The CDK CLI is installed outside the uploaded assembly, without lifecycle scripts,
+                // so nothing in the assembly (.npmrc, node_modules, scripts) can influence it.
+                'mkdir -p /tmp/cdk && cd /tmp/cdk && npm init -y >/dev/null',
+                `cd /tmp/cdk && npm install --ignore-scripts --no-audit --no-fund --registry https://registry.npmjs.org aws-cdk@${CDK_CLI_VERSION}`,
+              ],
+            },
             build: {
               commands: [
                 // Credentials for the target account exist only inside this build, via AssumeRole.
                 'read -r AK SK ST <<< "$(aws sts assume-role --role-arn "$TARGET_ROLE_ARN" --role-session-name "ce-$RUN_ID" --duration-seconds 3600 ${EXTERNAL_ID:+--external-id "$EXTERNAL_ID"} --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text)"',
                 'export AWS_ACCESS_KEY_ID="$AK" AWS_SECRET_ACCESS_KEY="$SK" AWS_SESSION_TOKEN="$ST"',
                 'unset AK SK ST',
+                // From here on the CLI must use only the assumed-role credentials, never the build role.
+                'unset AWS_CONTAINER_CREDENTIALS_RELATIVE_URI AWS_CONTAINER_CREDENTIALS_FULL_URI AWS_CONTAINER_AUTHORIZATION_TOKEN',
                 // Refuse to deploy unless the credentials really belong to the approved account.
                 '[ "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT" ]',
-                `npx --yes aws-cdk@${CDK_CLI_VERSION} deploy "$STACK_NAME" --app . --require-approval never --outputs-file cdk-outputs.json`,
+                '/tmp/cdk/node_modules/.bin/cdk deploy "$STACK_NAME" --app "$CODEBUILD_SRC_DIR" --require-approval never --outputs-file "$CODEBUILD_SRC_DIR/cdk-outputs.json"',
               ],
             },
           },
           artifacts: { files: ['cdk-outputs.json'] },
         }),
       });
-      bucket.grantRead(deployer, 'build-input/*');
-      bucket.grantWrite(deployer, 'build-output/*');
-      // Only the named role in the listed accounts; the role itself bounds what can be deployed.
+      bucket.grantRead(project, 'build-input/*');
+      bucket.grantWrite(project, 'build-output/*');
       deployerRole.addToPolicy(
         new iam.PolicyStatement({
           actions: ['sts:AssumeRole'],
-          resources: targets.map((a) => `arn:aws:iam::${a}:role/${deployRoleName}`),
+          resources: [`arn:aws:iam::${account}:role/${deployRoleName}`],
         }),
       );
       worker.addToRolePolicy(
         new iam.PolicyStatement({
           actions: ['codebuild:StartBuild', 'codebuild:BatchGetBuilds', 'codebuild:StopBuild'],
-          resources: [deployer.projectArn],
+          resources: [project.projectArn],
         }),
       );
-      worker.addEnvironment('DEPLOY_PROJECT', deployer.projectName);
+      deployers[account] = project;
+    }
+    if (targets.length > 0) {
+      worker.addEnvironment(
+        'DEPLOY_PROJECTS',
+        cdk.Stack.of(this).toJsonString(
+          Object.fromEntries(Object.entries(deployers).map(([a, p]) => [a, p.projectName])),
+        ),
+      );
       worker.addEnvironment('DEPLOY_ROLE_NAME', deployRoleName);
-      worker.addEnvironment('DEPLOY_ALLOWED_ACCOUNTS', targets.join(','));
       if (props.deployExternalId)
         worker.addEnvironment('DEPLOY_EXTERNAL_ID', props.deployExternalId);
     }
@@ -222,7 +240,6 @@ export class ControlPlaneApiStack extends cdk.Stack {
     };
 
     cdk.Tags.of(this).add('ManagedBy', 'cloud-engineer');
-    if (deployer) new cdk.CfnOutput(this, 'DeployerProjectName', { value: deployer.projectName });
     new cdk.CfnOutput(this, 'ApiUrl', { value: http.apiEndpoint });
     new cdk.CfnOutput(this, 'StateMachineArn', { value: workflow.stateMachine.stateMachineArn });
   }

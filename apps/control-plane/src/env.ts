@@ -25,7 +25,7 @@ export interface ControlPlaneEnv {
   modelId: string;
   stateMachineArn?: string;
   eventBusName?: string;
-  deploy?: { project: string; roleName: string; allowedAccounts: string[]; externalId?: string };
+  deploy?: { projects: Record<string, string>; roleName: string; externalId?: string };
 }
 
 function need(name: string): string {
@@ -42,12 +42,11 @@ export function readEnv(): ControlPlaneEnv {
     buildProject: need('BUILD_PROJECT'),
     modelId: need('MODEL_ID'),
     ...(process.env.STATE_MACHINE_ARN ? { stateMachineArn: process.env.STATE_MACHINE_ARN } : {}),
-    ...(process.env.DEPLOY_PROJECT
+    ...(process.env.DEPLOY_PROJECTS
       ? {
           deploy: {
-            project: process.env.DEPLOY_PROJECT,
+            projects: JSON.parse(process.env.DEPLOY_PROJECTS) as Record<string, string>,
             roleName: need('DEPLOY_ROLE_NAME'),
-            allowedAccounts: need('DEPLOY_ALLOWED_ACCOUNTS').split(','),
             ...(process.env.DEPLOY_EXTERNAL_ID
               ? { externalId: process.env.DEPLOY_EXTERNAL_ID }
               : {}),

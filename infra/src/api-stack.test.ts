@@ -6,14 +6,14 @@ import { ControlPlaneStack } from './stack.js';
 
 const MODEL_ARN = 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0';
 
-function buildWithDeployer() {
+function buildWithDeployer(accounts: string[]) {
   const app = new cdk.App();
   const data = new ControlPlaneStack(app, 'Data');
   const api = new ControlPlaneApiStack(app, 'Api', {
     data,
     modelId: 'example.model-v1:0',
     bedrockModelArns: [MODEL_ARN],
-    deployTargetAccountIds: ['123456789012'],
+    deployTargetAccountIds: accounts,
     deployExternalId: 'ext-1',
   });
   return Template.fromStack(api);
@@ -150,23 +150,14 @@ describe('ControlPlaneApiStack', () => {
 });
 
 describe('ControlPlaneApiStack deployer', () => {
-  const t = buildWithDeployer();
+  const t = buildWithDeployer(['123456789012', '210987654321']);
 
-  it('runs the pinned CDK CLI after assuming the role and checking the account', () => {
-    const project = Object.values(t.findResources('AWS::CodeBuild::Project'))[0]!;
-    const spec = String(project.Properties.Source.BuildSpec);
-    expect(spec).toMatch(/aws-cdk@\d+\.\d+\.\d+ deploy/);
-    expect(spec.indexOf('sts assume-role')).toBeLessThan(spec.indexOf('get-caller-identity'));
-    expect(spec.indexOf('get-caller-identity')).toBeLessThan(spec.indexOf('aws-cdk@'));
-    expect(spec).toContain('EXPECTED_ACCOUNT');
-    expect(spec).not.toMatch(/AKIA/);
-  });
-
-  it('can assume only the named role in the listed accounts', () => {
+  it('creates one project and one role per target account', () => {
+    t.resourceCountIs('AWS::CodeBuild::Project', 2);
     const assume = statements(t).filter((s) => actionsOf(s).includes('sts:AssumeRole'));
-    expect(assume).toHaveLength(1);
-    expect([assume[0]!.Resource].flat()).toEqual([
-      'arn:aws:iam::123456789012:role/CloudEngineerDeploy',
+    expect(assume.map((s) => [s.Resource].flat()).sort()).toEqual([
+      ['arn:aws:iam::123456789012:role/CloudEngineerDeploy'],
+      ['arn:aws:iam::210987654321:role/CloudEngineerDeploy'],
     ]);
     // No CloudFormation/IAM permissions of its own: everything runs through the assumed role.
     expect(
@@ -174,15 +165,30 @@ describe('ControlPlaneApiStack deployer', () => {
     ).toBe(false);
   });
 
-  it('tells the worker how to reach the deployer and lets it start only the two projects', () => {
-    const vars = Object.values(t.findResources('AWS::Lambda::Function')).flatMap((f) =>
+  it('installs the pinned CDK CLI outside the assembly, then deploys with the assumed role only', () => {
+    for (const project of Object.values(t.findResources('AWS::CodeBuild::Project'))) {
+      const spec = String(project.Properties.Source.BuildSpec);
+      expect(spec).toMatch(/npm install --ignore-scripts[^"]* aws-cdk@\d+\.\d+\.\d+/);
+      expect(spec).not.toContain('npx');
+      expect(spec).toContain('/tmp/cdk/node_modules/.bin/cdk deploy');
+      expect(spec).toContain('--app \\"$CODEBUILD_SRC_DIR\\"');
+      const i = (needle: string) => spec.indexOf(needle);
+      expect(i('sts assume-role')).toBeLessThan(i('unset AWS_CONTAINER_CREDENTIALS_RELATIVE_URI'));
+      expect(i('unset AWS_CONTAINER_CREDENTIALS_RELATIVE_URI')).toBeLessThan(
+        i('get-caller-identity'),
+      );
+      expect(i('get-caller-identity')).toBeLessThan(i('cdk deploy'));
+      expect(spec).toContain('EXPECTED_ACCOUNT');
+    }
+  });
+
+  it('tells the worker which project serves which account, and lets it start only those projects', () => {
+    const env = Object.values(t.findResources('AWS::Lambda::Function')).flatMap((f) =>
       Object.keys(f.Properties.Environment.Variables),
     );
-    expect(vars).toEqual(
-      expect.arrayContaining(['DEPLOY_PROJECT', 'DEPLOY_ROLE_NAME', 'DEPLOY_ALLOWED_ACCOUNTS']),
-    );
+    expect(env).toEqual(expect.arrayContaining(['DEPLOY_PROJECTS', 'DEPLOY_ROLE_NAME']));
     const starts = statements(t).filter((s) => actionsOf(s).includes('codebuild:StartBuild'));
-    expect(starts).toHaveLength(2);
+    expect(starts).toHaveLength(3); // gate runner + one deployer per account
     for (const s of starts) expect(JSON.stringify(s.Resource)).not.toBe('"*"');
   });
 });

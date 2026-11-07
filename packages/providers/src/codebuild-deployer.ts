@@ -20,12 +20,14 @@ export interface CodeBuildDeployerOptions {
   s3: DocClient;
   codebuild: DocClient;
   bucket: string;
-  /** CodeBuild project whose buildspec assumes the target role and runs the pinned CDK CLI. */
-  projectName: string;
+  /**
+   * One CodeBuild project per target account (account id -> project name). Each project's role can
+   * assume the deploy role of its own account only, so a build can never reach another account.
+   * The keys are also the allow-list: any other account is refused before a build starts.
+   */
+  projects: Record<string, string>;
   /** Role the customer created in the target account (trusting the deployer project's role). */
   roleName: string;
-  /** Only these accounts may be deployed to; anything else is refused before a build starts. */
-  allowedAccounts: string[];
   externalId?: string;
   pollMs?: number;
   timeoutMs?: number;
@@ -48,10 +50,11 @@ export class CodeBuildDeployer implements DeployDeps {
     if (!ROLE.test(o.roleName)) {
       throw new CloudEngineerError('VALIDATION_FAILED', 'Invalid deploy role name');
     }
-    if (o.allowedAccounts.length === 0 || o.allowedAccounts.some((a) => !/^\d{12}$/.test(a))) {
+    const accounts = Object.keys(o.projects);
+    if (accounts.length === 0 || accounts.some((a) => !/^\d{12}$/.test(a))) {
       throw new CloudEngineerError(
         'VALIDATION_FAILED',
-        'allowedAccounts must list 12-digit account ids',
+        'projects must be keyed by 12-digit account ids',
       );
     }
     this.pollMs = o.pollMs ?? 10_000;
@@ -60,7 +63,7 @@ export class CodeBuildDeployer implements DeployDeps {
   }
 
   private assertTarget(accountId: string): void {
-    if (!this.o.allowedAccounts.includes(accountId)) {
+    if (!Object.hasOwn(this.o.projects, accountId)) {
       throw new CloudEngineerError(
         'BLOCKED',
         `Account ${accountId} is not in the deployer's allow-list`,
@@ -108,7 +111,7 @@ export class CodeBuildDeployer implements DeployDeps {
     const env = (name: string, value: string) => ({ name, value, type: 'PLAINTEXT' as const });
     const startRes = (await this.o.codebuild.send(
       new StartBuildCommand({
-        projectName: this.o.projectName,
+        projectName: this.o.projects[ctx.accountId]!,
         sourceTypeOverride: 'S3',
         sourceLocationOverride: `${this.o.bucket}/${sourceKey}`,
         artifactsOverride: {
@@ -182,15 +185,14 @@ export class CodeBuildDeployer implements DeployDeps {
 export function createCodeBuildDeployer(
   region: string,
   bucket: string,
-  opts: { project: string; roleName: string; allowedAccounts: string[]; externalId?: string },
+  opts: { projects: Record<string, string>; roleName: string; externalId?: string },
 ): CodeBuildDeployer {
   return new CodeBuildDeployer({
     s3: new S3Client({ region }),
     codebuild: new CodeBuildClient({ region }),
     bucket,
-    projectName: opts.project,
+    projects: opts.projects,
     roleName: opts.roleName,
-    allowedAccounts: opts.allowedAccounts,
     ...(opts.externalId ? { externalId: opts.externalId } : {}),
   });
 }
