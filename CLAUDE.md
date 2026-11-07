@@ -31,18 +31,18 @@ You are contributing to **Cloud Engineer**, not building a toy prompt-to-code ch
 
 **From prompt to a deployed, verifiable AWS application.**
 
-Cloud Engineer receives a natural-language product request and carries it through requirements, technical design, frontend/backend implementation, AWS infrastructure generation, testing, corrections, deployment, verification, and handoff. The entire orchestration/control plane uses managed **serverless, event-driven, durable** AWS services. Long-running builds run in **ephemeral managed workers**, not permanent servers.
+Cloud Engineer receives a natural-language product request and carries it through requirements, technical design, backend implementation, AWS infrastructure generation, testing, corrections, deployment, verification, and handoff. The entire orchestration/control plane uses managed **serverless, event-driven, durable** AWS services. Long-running builds run in **ephemeral managed workers**, not permanent servers.
 
 ### Primary experience
 
 ```text
 cloud-engineer create "Build a SaaS app for restaurant reservations,
-with login, admin dashboard, API, database and email notifications"
+with login, API, database and email notifications"
 
 → Requirements & assumptions
 → Architecture and implementation plan
 → User review / clarification when required
-→ Frontend, backend and infrastructure generation
+→ Backend and infrastructure generation
 → Build, tests, security checks and bounded repair loops
 → Deployment plan and explicit approval
 → Deploy to the user's AWS account
@@ -77,7 +77,7 @@ For a supported application template, a user can provide a prompt and target AWS
 
 1. **Serverless-first orchestration:** no always-on orchestration host, agent daemon, or Kubernetes requirement.
 2. **Durable by default:** every significant step has explicit state, persisted artifacts, checkpoints, retries, and a restart strategy.
-3. **Application-first:** frontend, backend, identity, data, infrastructure, and deployment are one deliverable.
+3. **Application-first:** backend, identity, data, infrastructure, and deployment are one deliverable.
 4. **Spec before execution:** requirements and architecture are versioned artifacts, not hidden model context.
 5. **Controlled autonomy:** AI can propose and implement, while deterministic policy and validation gate risky operations.
 6. **Real ownership:** the user keeps the source code and AWS resources; no hard dependency on Zerverless.
@@ -108,10 +108,10 @@ For a supported application template, a user can provide a prompt and target AWS
 
 ### 3.3 Development
 
-- Generate and edit a real TypeScript project, frontend and backend, infrastructure-as-code, tests, and documentation.
+- Generate and edit a real TypeScript project, backend, infrastructure-as-code, tests, and documentation.
 - Use modular generation stages with explicit inputs/outputs; a single unconstrained LLM response is not an engineering pipeline.
 - Preserve a coherent repo structure, package dependency graph, and build scripts.
-- Generate frontend pages and API code consistent with the shared contracts.
+- Generate API code consistent with the shared contracts.
 - Support clean regeneration of a failed component without destroying completed components.
 
 ### 3.4 Validation and bounded repair
@@ -204,12 +204,11 @@ AI proposes requirements, architecture, code, tests, and potential repairs. Type
 
 ## 5. Initial AWS application support matrix
 
-**MVP target:** one supported full-stack application created end-to-end, not fifty incomplete AWS integrations.
+**MVP target:** one supported API application created end-to-end, not fifty incomplete AWS integrations.
 
 | Concern | MVP | Later |
 | --- | --- | --- |
 | Application language | TypeScript | Other languages |
-| Frontend | Static React/Next.js export on S3 + CloudFront when compatible | SSR alternatives |
 | API | API Gateway + Lambda | AppSync, WebSockets |
 | Data | DynamoDB | Aurora, OpenSearch, advanced migration |
 | Auth | Cognito | Federation, custom identity providers |
@@ -219,7 +218,7 @@ AI proposes requirements, architecture, code, tests, and potential repairs. Type
 | Regions/accounts | One explicitly selected target | Multi-region / multi-account |
 | Repository integration | Local export / Git adapter | Multiple Git forges |
 
-Never claim to support runtime capabilities the chosen hosting option cannot provide (for example, SSR in a static-only frontend).
+Never claim to support runtime capabilities the chosen hosting option cannot provide.
 
 ---
 
@@ -413,12 +412,12 @@ Mandatory policies:
 - Generate a deployment plan, request approval, and (with explicit consent) deploy to an isolated AWS account.
 - Run smoke tests and export the manifest plus source archive.
 
-**Do not move to broad agent orchestration, visual builders, multi-cloud support, or SSR before this works reliably.**
+**Do not move to broad agent orchestration, visual builders, or multi-cloud support before this works reliably.**
 
 ### M2 — Durable engineering
 
 - Step Functions Standard execution, asynchronous workers, retries, callbacks, cancellation, idempotency, approval waits.
-- Frontend support, Cognito auth, S3 assets, and an example full-stack app.
+- Cognito auth, S3 assets, and an example API application.
 - Bounded repair loops, security/cost policy gates, full audit evidence.
 
 ### M3 — Open platform
@@ -437,13 +436,13 @@ Mandatory policies:
 
 ## 12. Example acceptance scenario
 
-**Prompt:** “Create a simple restaurant booking app with an admin dashboard, account login, booking API, and database.”
+**Prompt:** “Create a simple restaurant booking app with account login, booking API, and database.”
 
 Expected behavior:
 
 1. A run is created and persists through interruptions.
 2. The system documents requirements/assumptions and outputs a reviewable Blueprint.
-3. The generated repo includes a frontend, Lambda API, Cognito authentication, DynamoDB persistence, CDK, tests, and README.
+3. The generated repo includes a Lambda API, Cognito authentication, DynamoDB persistence, CDK, tests, and README.
 4. Builds and tests execute in an isolated environment; failures are visible and repairs bounded.
 5. A real AWS account/region is clearly selected and deployment approval references the exact plan.
 6. Following approval, the system deploys and checks basic end-to-end behavior.
