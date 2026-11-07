@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Alejo2075/aws-cloud-engineer/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Alejo2075/aws-cloud-engineer/ci.yml?branch=main&label=CI&labelColor=1a1033&style=flat"></a>
-  <a href="https://github.com/Alejo2075/aws-cloud-engineer/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Alejo2075/aws-cloud-engineer?include_prereleases&color=8B2CF5&labelColor=1a1033&style=flat"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-C42DE0?labelColor=1a1033&style=flat"></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-E835C8?labelColor=1a1033&style=flat&logo=typescript&logoColor=white">
-  <img alt="Amazon Bedrock" src="https://img.shields.io/badge/Amazon-Bedrock-F062B0?labelColor=1a1033&style=flat&logo=amazonaws&logoColor=white">
+  <a href="https://github.com/Alejo2075/aws-cloud-engineer/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Alejo2075/aws-cloud-engineer/ci.yml?branch=main&label=CI&labelColor=0b1d26&style=flat"></a>
+  <a href="https://github.com/Alejo2075/aws-cloud-engineer/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Alejo2075/aws-cloud-engineer?include_prereleases&color=7FE04A&labelColor=0b1d26&style=flat"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-4FD0C8?labelColor=0b1d26&style=flat"></a>
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-43C2E4?labelColor=0b1d26&style=flat&logo=typescript&logoColor=white">
+  <img alt="Amazon Bedrock" src="https://img.shields.io/badge/Amazon-Bedrock-3AB4F6?labelColor=0b1d26&style=flat&logo=amazonaws&logoColor=white">
 </p>
 
 Cloud Engineer is a serverless AI system that turns a natural-language prompt into a tested AWS application: an API Gateway + Lambda + DynamoDB + Cognito project defined with AWS CDK. It plans a validated blueprint, generates the code, runs the quality gates, and stops at an approval that is bound to the exact deployment plan before anything is deployed. The result comes with its source, test evidence and a machine-readable hand-off manifest.
