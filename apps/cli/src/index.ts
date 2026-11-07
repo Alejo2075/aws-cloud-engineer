@@ -15,6 +15,8 @@ import {
   loadPlan,
   resumeRun,
   type PipelineDeps,
+  pendingQuestions,
+  respondToInput,
 } from './pipeline.js';
 
 const program = new Command('cloud-engineer')
@@ -45,6 +47,12 @@ const noModel: PipelineDeps['provider'] = {
 function deps(provider: PipelineDeps['provider'] = noModel): PipelineDeps {
   const root = resolve(program.opts<{ stateDir: string }>().stateDir);
   return { engine: new WorkflowEngine(makeStore(root)), root, provider };
+}
+
+function printQuestions(runId: string, questions: string[]) {
+  console.log(`Run ${runId} needs your input before it can continue:\n`);
+  questions.forEach((q, i) => console.log(`  ${i + 1}. ${q}`));
+  console.log(`\nAnswer in order:\n  cloud-engineer respond ${runId} --answer "<1>" "<2>" ...`);
 }
 
 function bedrock(region: string) {
@@ -86,6 +94,10 @@ program
         accountId: o.account,
         blueprint,
       });
+      if (run.status === 'NEEDS_INPUT') {
+        printQuestions(run.runId, await pendingQuestions(d, run.runId));
+        return;
+      }
       const { plan, hash } = await loadPlan(d, run.runId);
       console.log(`Run ${run.runId} is ${run.stage}\n`);
       console.log(renderPlan(plan, hash));
@@ -94,6 +106,20 @@ program
       );
     },
   );
+
+program
+  .command('respond <runId>')
+  .description('Answer the questions a run is waiting on (one --answer per question, in order)')
+  .option('--answer <text...>', 'answers, in the order the questions were asked')
+  .action(async (runId: string, o: { answer?: string[] }) => {
+    const d = deps(bedrock(process.env.AWS_REGION ?? 'us-east-1'));
+    const run = await respondToInput(d, runId, o.answer ?? []);
+    if (run.status === 'NEEDS_INPUT') {
+      printQuestions(runId, await pendingQuestions(d, runId));
+      return;
+    }
+    console.log(`${runId}: ${run.status} (${run.stage})`);
+  });
 
 program
   .command('status <runId>')
@@ -109,6 +135,7 @@ program
           status: run.status,
           environment: run.targetEnvironment,
           artifacts: run.artifacts.map((a) => a.kind),
+          ...(run.status === 'NEEDS_INPUT' ? { questions: await pendingQuestions(d, runId) } : {}),
           updatedAt: run.updatedAt,
         },
         null,

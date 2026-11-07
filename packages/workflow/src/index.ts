@@ -227,9 +227,33 @@ export class WorkflowEngine {
     return updated;
   }
 
+  /** ACTIVE -> NEEDS_INPUT: the run waits for a human decision; the stage is preserved. */
+  async requestInput(runId: string, questions: string[], actor = 'local'): Promise<Run> {
+    const run = await this.getRun(runId);
+    if (run.status !== 'ACTIVE') {
+      throw new CloudEngineerError('INVALID_TRANSITION', `Run is ${run.status}, not ACTIVE`);
+    }
+    const updated: Run = { ...run, status: 'NEEDS_INPUT', updatedAt: this.now().toISOString() };
+    await this.store.put(updated, run.updatedAt);
+    await this.audit(updated, 'InputRequested', actor, { stage: run.stage, questions });
+    return updated;
+  }
+
+  /** NEEDS_INPUT -> ACTIVE once the decision has been recorded by the caller. */
+  async provideInput(runId: string, actor = 'local'): Promise<Run> {
+    const run = await this.getRun(runId);
+    if (run.status !== 'NEEDS_INPUT') {
+      throw new CloudEngineerError('INVALID_TRANSITION', `Run is ${run.status}, not NEEDS_INPUT`);
+    }
+    const updated: Run = { ...run, status: 'ACTIVE', updatedAt: this.now().toISOString() };
+    await this.store.put(updated, run.updatedAt);
+    await this.audit(updated, 'InputProvided', actor, { stage: run.stage });
+    return updated;
+  }
+
   async cancel(runId: string, actor = 'local'): Promise<Run> {
     const run = await this.getRun(runId);
-    if (run.status !== 'ACTIVE') return run;
+    if (run.status !== 'ACTIVE' && run.status !== 'NEEDS_INPUT') return run;
     const updated: Run = { ...run, status: 'CANCELLED', updatedAt: this.now().toISOString() };
     await this.store.put(updated, run.updatedAt);
     await this.audit(updated, 'RunCancelled', actor);

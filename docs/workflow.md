@@ -5,8 +5,13 @@ CREATED → INTAKE → REQUIREMENTS → DESIGN → PLAN → GENERATE → BUILD �
         → SECURITY_REVIEW → DEPLOYMENT_REVIEW → AWAITING_APPROVAL → DEPLOY → VERIFY → HANDOFF → SUCCEEDED
 ```
 
-Side statuses: `FAILED`, `CANCELLED` (implemented); `NEEDS_INPUT`, `BLOCKED`, `ROLLBACK_REQUIRED` are
+Side statuses: `FAILED`, `CANCELLED`, `NEEDS_INPUT` (implemented); `BLOCKED` and `ROLLBACK_REQUIRED` are
 defined in the contract but no code path sets them yet.
+
+`NEEDS_INPUT`: while planning, the model may return up to 3 blocking questions (total per run). The
+run keeps its stage, `questions.json` is stored, and `respond` appends the answers to `decisions.json`
+and continues. Answers are untrusted text, passed to the model only inside `<decisions>` tags. Once
+the budget is spent the model is told to use documented defaults; a question after that fails the stage.
 
 Allowed non-linear moves: `BUILD|TEST → GENERATE` (repair), `AWAITING_APPROVAL → PLAN` (revise).
 `DEPLOY` is reachable only through `WorkflowEngine.approve`.

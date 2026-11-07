@@ -19,7 +19,12 @@ import {
   initGitRepository,
   manifestResources,
 } from '@cloud-engineer/handoff';
-import { checkTraceability, planBlueprint, type ModelProvider } from '@cloud-engineer/planning';
+import {
+  checkTraceability,
+  planRequirements,
+  type Decision,
+  type ModelProvider,
+} from '@cloud-engineer/planning';
 import { ApplicationBlueprintSchema, type ApplicationBlueprint } from '@cloud-engineer/contracts';
 import { CloudEngineerError } from '@cloud-engineer/shared';
 import {
@@ -140,6 +145,55 @@ export async function resumeRun(d: PipelineDeps, runId: string, actor = 'local')
   return advance(d, runId);
 }
 
+/** Total clarifying questions a run may ask; after that the model must use defaults. */
+const MAX_QUESTIONS = 3;
+
+async function readDecisions(d: PipelineDeps, runId: string): Promise<Decision[]> {
+  try {
+    return await readJson<Decision[]>(d, runId, 'decisions.json');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
+  }
+}
+
+/** Questions the run is currently waiting on (empty unless NEEDS_INPUT). */
+export async function pendingQuestions(d: PipelineDeps, runId: string): Promise<string[]> {
+  const run = await d.engine.getRun(runId);
+  return run.status === 'NEEDS_INPUT' ? readJson<string[]>(d, runId, 'questions.json') : [];
+}
+
+/**
+ * Records the user's answers (one per pending question, in order) as a persisted decision and
+ * continues the run. Answers are untrusted text and only ever reach the model inside <decisions>.
+ */
+export async function respondToInput(
+  d: PipelineDeps,
+  runId: string,
+  answers: string[],
+  actor = 'local',
+): Promise<Run> {
+  const run = await d.engine.getRun(runId);
+  const questions = await pendingQuestions(d, runId);
+  if (run.status !== 'NEEDS_INPUT') {
+    throw new CloudEngineerError('INVALID_TRANSITION', `Run is ${run.status}, not NEEDS_INPUT`);
+  }
+  const clean = answers.map((a) => a.trim());
+  if (clean.length !== questions.length || clean.some((a) => !a || a.length > 1000)) {
+    throw new CloudEngineerError(
+      'VALIDATION_FAILED',
+      `Provide exactly ${questions.length} non-empty answers (max 1000 characters each)`,
+    );
+  }
+  const decisions = [
+    ...(await readDecisions(d, runId)),
+    ...questions.map((question, i) => ({ question, answer: clean[i]! })),
+  ];
+  await saveArtifact(d, run, 'requirements', 'decisions.json', JSON.stringify(decisions, null, 2));
+  await d.engine.provideInput(runId, actor);
+  return advance(d, runId);
+}
+
 /** State-driven loop: each stage's work is idempotent and keyed off persisted artifacts. */
 async function advance(d: PipelineDeps, runId: string): Promise<Run> {
   const dir = projectDir(d.root, runId);
@@ -157,10 +211,27 @@ async function advance(d: PipelineDeps, runId: string): Promise<Run> {
           break;
         case 'REQUIREMENTS': {
           const intake = await readJson<Intake>(d, runId, 'intake.json');
-          const blueprint =
-            intake.blueprint !== undefined
-              ? parseSuppliedBlueprint(intake.blueprint)
-              : await planBlueprint(d.provider, run.prompt);
+          let blueprint: ApplicationBlueprint;
+          if (intake.blueprint !== undefined) {
+            blueprint = parseSuppliedBlueprint(intake.blueprint);
+          } else {
+            const decisions = await readDecisions(d, runId);
+            const result = await planRequirements(d.provider, run.prompt, {
+              decisions,
+              allowQuestions: decisions.length < MAX_QUESTIONS,
+            });
+            if (result.kind === 'questions') {
+              await saveArtifact(
+                d,
+                run,
+                'requirements',
+                'questions.json',
+                JSON.stringify(result.questions, null, 2),
+              );
+              return d.engine.requestInput(runId, result.questions);
+            }
+            blueprint = result.blueprint;
+          }
           await saveArtifact(
             d,
             run,

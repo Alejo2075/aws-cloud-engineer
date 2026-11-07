@@ -91,3 +91,28 @@ describe('approval', () => {
     ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
   });
 });
+
+describe('input requests', () => {
+  it('pauses and resumes a run at the same stage, and can be cancelled while waiting', async () => {
+    const e = engine();
+    const run = await e.createRun({ prompt: 'x', region: 'us-east-1' });
+    await e.transition(run.runId, 'INTAKE');
+    const waiting = await e.requestInput(run.runId, ['Which region?']);
+    expect(waiting).toMatchObject({ status: 'NEEDS_INPUT', stage: 'INTAKE' });
+    await expect(e.transition(run.runId, 'REQUIREMENTS')).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+    });
+    await expect(e.requestInput(run.runId, ['again'])).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+    });
+    expect(await e.provideInput(run.runId)).toMatchObject({ status: 'ACTIVE', stage: 'INTAKE' });
+    await expect(e.provideInput(run.runId)).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
+
+    await e.requestInput(run.runId, ['q']);
+    expect((await e.cancel(run.runId)).status).toBe('CANCELLED');
+    const types = (await e.listEvents(run.runId)).map((ev) => ev.type);
+    expect(types).toEqual(
+      expect.arrayContaining(['InputRequested', 'InputProvided', 'RunCancelled']),
+    );
+  });
+});

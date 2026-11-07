@@ -10,7 +10,9 @@ import {
   createRun,
   exportRun,
   loadPlan,
+  pendingQuestions,
   projectDir,
+  respondToInput,
   resumeRun,
   type PipelineDeps,
 } from './pipeline.js';
@@ -310,5 +312,42 @@ describe('site verification', () => {
     });
     expect(res).toMatchObject({ deployed: true, verified: false });
     expect(res.run.status).toBe('FAILED');
+  });
+});
+
+describe('needs input', () => {
+  const ask = JSON.stringify({ needsInput: { questions: ['Which payment provider?'] } });
+
+  it('stops at NEEDS_INPUT, then continues with the recorded answer', async () => {
+    const provider = new FixtureProvider([ask, JSON.stringify(blueprint)]);
+    const ctx = await setup({ provider });
+    const waiting = await createRun(ctx.d, opts);
+    expect(waiting).toMatchObject({ status: 'NEEDS_INPUT', stage: 'REQUIREMENTS' });
+    expect(await pendingQuestions(ctx.d, waiting.runId)).toEqual(['Which payment provider?']);
+    await expect(resumeRun(ctx.d, waiting.runId)).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+    });
+    await expect(respondToInput(ctx.d, waiting.runId, [])).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+
+    const run = await respondToInput(ctx.d, waiting.runId, ['Stripe']);
+    expect(run.stage).toBe('AWAITING_APPROVAL');
+    expect(provider.calls[1]!.user).toContain('A: Stripe');
+    await expect(respondToInput(ctx.d, waiting.runId, ['again'])).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+    });
+  });
+
+  it('forbids further questions once the budget is spent and then fails instead of looping', async () => {
+    const three = JSON.stringify({ needsInput: { questions: ['a', 'b', 'c'] } });
+    const provider = new FixtureProvider([three, ask, ask, ask]);
+    const ctx = await setup({ provider });
+    const waiting = await createRun(ctx.d, opts);
+    await expect(respondToInput(ctx.d, waiting.runId, ['1', '2', '3'])).rejects.toThrow(
+      /questions are not allowed/,
+    );
+    expect(provider.calls[1]!.user).toContain('Do not ask questions');
+    expect((await ctx.d.engine.getRun(waiting.runId)).status).toBe('FAILED');
   });
 });

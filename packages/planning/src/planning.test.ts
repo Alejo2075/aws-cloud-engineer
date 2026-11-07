@@ -5,6 +5,7 @@ import {
   checkTraceability,
   extractJson,
   planBlueprint,
+  planRequirements,
 } from './index.js';
 
 export const goodBlueprint = {
@@ -82,5 +83,39 @@ describe('checkTraceability', () => {
       'task T9 cites unknown requirement R404',
       'requirement R1 has no task',
     ]);
+  });
+});
+
+describe('planRequirements', () => {
+  const ask = JSON.stringify({ needsInput: { questions: ['Which payment provider?'] } });
+
+  it('returns blocking questions when the model asks for them', async () => {
+    const res = await planRequirements(new FixtureProvider([ask]), 'shop with payments');
+    expect(res).toEqual({ kind: 'questions', questions: ['Which payment provider?'] });
+  });
+
+  it('passes earlier decisions to the model as data and forbids asking when disallowed', async () => {
+    const p = new FixtureProvider([JSON.stringify(goodBlueprint)]);
+    const res = await planRequirements(p, 'shop', {
+      decisions: [{ question: 'Which payment provider?', answer: 'Stripe' }],
+      allowQuestions: false,
+    });
+    expect(res.kind).toBe('blueprint');
+    expect(p.calls[0]!.user).toContain('<decisions>');
+    expect(p.calls[0]!.user).toContain('A: Stripe');
+    expect(p.calls[0]!.user).toContain('Do not ask questions');
+  });
+
+  it('rejects questions when they are not allowed and eventually fails', async () => {
+    const p = new FixtureProvider([ask, ask, ask]);
+    await expect(planRequirements(p, 'x', { allowQuestions: false })).rejects.toThrow(
+      /questions are not allowed/,
+    );
+  });
+
+  it('rejects malformed question payloads', async () => {
+    const tooMany = JSON.stringify({ needsInput: { questions: ['a', 'b', 'c', 'd'] } });
+    const p = new FixtureProvider([tooMany, JSON.stringify(goodBlueprint)]);
+    expect((await planRequirements(p, 'x')).kind).toBe('blueprint');
   });
 });
