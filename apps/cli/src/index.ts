@@ -22,7 +22,7 @@ import {
   type PipelineDeps,
   pendingQuestions,
   respondToInput,
-} from './pipeline.js';
+} from '@cloud-engineer/pipeline';
 
 const program = new Command('cloud-engineer')
   .description('Turn a prompt into a verified AWS application')

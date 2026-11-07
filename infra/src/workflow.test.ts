@@ -44,6 +44,12 @@ describe('RunWorkflow', () => {
     expect(States.Advance.Retry[0].MaxAttempts).toBeLessThanOrEqual(3);
   });
 
+  it('passes the approval decision to the deploy worker', () => {
+    const { States } = definition();
+    expect(States.Deploy.Parameters['decision.$']).toBe('$.decision');
+    expect(States.Deploy.Parameters.action).toBe('deploy');
+  });
+
   it('waits for people with task tokens and a bounded timeout, and routes rejection to cancel', () => {
     const { States } = definition();
     for (const name of ['WaitForInput', 'WaitForApproval']) {
