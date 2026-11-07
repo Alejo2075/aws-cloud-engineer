@@ -4,6 +4,13 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-07
+
+### Changed
+
+- README rewritten: banner, badges in the banner's colors, overview, AWS Lambda Hackathon, then Features, How it works, Quick start, Architecture, Configuration, Documentation, Project status & roadmap, Contributing, Security & license. Images moved from the repo root to `docs/assets/`.
+- `CLAUDE.md` no longer mentions frontend support (generated apps are API only), and `ROADMAP.md` status was brought up to date.
+
 ## [0.5.0] - 2026-11-07
 
 ### Removed
