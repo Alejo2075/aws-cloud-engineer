@@ -133,6 +133,33 @@ export function createHandler(repo: Repo, now: () => Date = () => new Date()) {
       const item = await repo.get(pk, `${entity.name}#${id}`);
       return item ? respond(200, publicItem(item)) : respond(404, { message: 'not found' });
     }
+    if (id !== undefined && method === 'PUT') {
+      const raw = event.body ?? '';
+      const text = event.isBase64Encoded ? Buffer.from(raw, 'base64').toString('utf8') : raw;
+      if (Buffer.byteLength(text) > MAX_BODY_BYTES) return respond(413, { message: 'body too large' });
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        return respond(400, { message: 'invalid JSON' });
+      }
+      const result = validate(entity, parsed);
+      if (!result.ok) return respond(400, { message: 'validation failed', errors: result.errors });
+      const sk = `${entity.name}#${id}`;
+      const existing = await repo.get(pk, sk);
+      if (!existing) return respond(404, { message: 'not found' });
+      const item = {
+        pk,
+        sk,
+        id,
+        entity: entity.name,
+        createdAt: existing.createdAt,
+        updatedAt: now().toISOString(),
+        ...result.value,
+      };
+      await repo.put(pk, sk, item);
+      return respond(200, publicItem(item));
+    }
     if (id !== undefined && method === 'DELETE') {
       await repo.remove(pk, `${entity.name}#${id}`);
       return { statusCode: 204, headers: {}, body: '' };

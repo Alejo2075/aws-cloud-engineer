@@ -112,6 +112,7 @@ export class AppStack extends cdk.Stack {
         allowMethods: [
           apigwv2.CorsHttpMethod.GET,
           apigwv2.CorsHttpMethod.POST,
+          apigwv2.CorsHttpMethod.PUT,
           apigwv2.CorsHttpMethod.DELETE,
         ],
         allowHeaders: ['authorization', 'content-type'],
@@ -130,7 +131,7 @@ export class AppStack extends cdk.Stack {
       });
       api.addRoutes({
         path: `/${routeFor(e)}/{id}`,
-        methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.DELETE],
+        methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT, apigwv2.HttpMethod.DELETE],
         integration,
       });
     }

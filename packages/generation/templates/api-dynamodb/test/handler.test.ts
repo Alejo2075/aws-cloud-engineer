@@ -111,4 +111,22 @@ describe('generated API handler', () => {
     const foreign = Buffer.from('Other#00000000-0000-0000-0000-000000000000').toString('base64url');
     expect((await h(ev('GET', base, 'u1', undefined, { cursor: foreign }))).statusCode).toBe(400);
   });
+
+  it('replaces an item on PUT, keeping identity and ownership', async () => {
+    const repo = new MemoryRepo();
+    const h = createHandler(repo);
+    const item = JSON.parse((await h(ev('POST', base, 'u1', validBody))).body);
+    const changed = { ...validBody, pk: 'USER#evil', id: 'x' };
+    const res = await h(ev('PUT', `${base}/${item.id}`, 'u1', changed));
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.id).toBe(item.id);
+    expect(body.createdAt).toBe(item.createdAt);
+    expect(body.updatedAt).toBeDefined();
+    expect((await h(ev('PUT', `${base}/${item.id}`, 'u2', validBody))).statusCode).toBe(404);
+    expect((await h(ev('PUT', `${base}/${item.id}`, 'u1', {}))).statusCode).toBe(400);
+    const missing = '00000000-0000-0000-0000-000000000000';
+    expect((await h(ev('PUT', `${base}/${missing}`, 'u1', validBody))).statusCode).toBe(404);
+    expect([...repo.rows.keys()].every((k) => k.startsWith('USER#u1|'))).toBe(true);
+  });
 });
