@@ -9,13 +9,15 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@cloud-engineer/contracts": "workspace:*",
-    "@cloud-engineer/shared": "workspace:*",
     "@aws-sdk/client-bedrock-runtime": "3.1163.0",
-    "@cloud-engineer/planning": "workspace:*",
-    "@cloud-engineer/workflow": "workspace:*",
+    "@aws-sdk/client-codebuild": "3.1163.0",
     "@aws-sdk/client-dynamodb": "3.1163.0",
+    "@aws-sdk/client-s3": "3.1163.0",
     "@aws-sdk/lib-dynamodb": "3.1163.0",
-    "@aws-sdk/client-s3": "3.1163.0"
+    "@cloud-engineer/contracts": "workspace:*",
+    "@cloud-engineer/planning": "workspace:*",
+    "@cloud-engineer/shared": "workspace:*",
+    "@cloud-engineer/validation": "workspace:*",
+    "@cloud-engineer/workflow": "workspace:*"
   }
 }

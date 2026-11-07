@@ -43,3 +43,4 @@ export class BedrockProvider implements ModelProvider {
 export { FixtureProvider } from '@cloud-engineer/planning';
 export * from './dynamo-store.js';
 export * from './s3-artifacts.js';
+export * from './codebuild-gates.js';

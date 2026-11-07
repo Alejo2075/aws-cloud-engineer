@@ -3,7 +3,7 @@
 1. Live validation: enable a Bedrock model, run a model-planned `create` end to end.
 2. Live validation: deploy the example to a sandbox account with a budget alarm; confirm `verify` and teardown plan.
 3. Wire `S3ArtifactStore` into the pipeline (Dynamo run store is selectable via `CLOUD_ENGINEER_TABLE`; both offline-tested only).
-4. CodeBuild gate runner client (project defined in `infra/`; local sandbox stays dev-only).
+4. Live validation of `CodeBuildGateRunner` (per-run source/artifact overrides, artifact layout, log retrieval from CloudWatch); per-run IAM scoping.
 5. Step Functions Standard definition + approval callback (task token).
 6. CLI: `runs approve` alias.
 7. Upgrade the frontend to React/Next.js static export; custom domain + WAF; Cognito hosted UI.

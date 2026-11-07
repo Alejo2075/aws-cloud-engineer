@@ -67,4 +67,18 @@ describe('ControlPlaneStack', () => {
       }
     }
   });
+
+  it('lets the build executor write only the build-output prefix', () => {
+    const stmts = Object.values(t.findResources('AWS::IAM::Policy')).flatMap(
+      (p) =>
+        p.Properties.PolicyDocument.Statement as { Action: string | string[]; Resource: unknown }[],
+    );
+    const writes = stmts.filter((s) => JSON.stringify(s.Action).includes('s3:PutObject'));
+    expect(writes.length).toBeGreaterThan(0);
+    for (const w of writes) {
+      const text = JSON.stringify(w.Resource);
+      expect(text).toContain('/build-output/');
+      expect(text).not.toContain('runs/');
+    }
+  });
 });

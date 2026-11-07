@@ -140,6 +140,9 @@ importers:
       '@aws-sdk/client-bedrock-runtime':
         specifier: 3.1163.0
         version: 3.1163.0
+      '@aws-sdk/client-codebuild':
+        specifier: 3.1163.0
+        version: 3.1163.0
       '@aws-sdk/client-dynamodb':
         specifier: 3.1163.0
         version: 3.1163.0
@@ -158,6 +161,9 @@ importers:
       '@cloud-engineer/shared':
         specifier: workspace:*
         version: link:../shared
+      '@cloud-engineer/validation':
+        specifier: workspace:^
+        version: link:../validation
       '@cloud-engineer/workflow':
         specifier: workspace:*
         version: link:../workflow
@@ -213,6 +219,10 @@ packages:
 
   '@aws-sdk/client-cloudformation@3.1163.0':
     resolution: {integrity: sha512-zLs1Z8p/81xhYSDfff7qbmV4Z1Q24u3hKMg98XEMmEslrPRmWArSY4JF4lv0yuAUdQaxyfGWLLHsQ8goKIxY1w==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-codebuild@3.1163.0':
+    resolution: {integrity: sha512-IVbVDGpe2zP0ngnCwyslpREd5Nml/4bf8cb6l6fr6LqNb9ro7/b1run8/mGM9C7UFEujM3lAPVl89EsFucOuMg==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-dynamodb@3.1163.0':
@@ -1200,6 +1210,17 @@ snapshots:
       tslib: 2.9.1
 
   '@aws-sdk/client-cloudformation@3.1163.0':
+    dependencies:
+      '@aws-sdk/core': 3.980.0
+      '@aws-sdk/credential-provider-node': 3.972.93
+      '@aws-sdk/types': 3.975.0
+      '@smithy/core': 3.39.0
+      '@smithy/fetch-http-handler': 5.8.1
+      '@smithy/node-http-handler': 4.14.2
+      '@smithy/types': 4.20.0
+      tslib: 2.9.1
+
+  '@aws-sdk/client-codebuild@3.1163.0':
     dependencies:
       '@aws-sdk/core': 3.980.0
       '@aws-sdk/credential-provider-node': 3.972.93

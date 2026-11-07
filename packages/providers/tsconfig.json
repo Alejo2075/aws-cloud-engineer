@@ -18,6 +18,9 @@
     },
     {
       "path": "../workflow"
+    },
+    {
+      "path": "../validation"
     }
   ]
 }

@@ -68,12 +68,15 @@ export class ControlPlaneStack extends cdk.Stack {
             commands: ['npm install', 'npm run typecheck', 'npm run test', 'npm run synth'],
           },
         },
+        // The per-run artifact location is supplied by CodeBuildGateRunner when it starts a build.
+        artifacts: { files: ['cdk.out/**/*'] },
       }),
       encryptionKey: key,
     });
-    // Least privilege: the build role sees only the build-input prefix, never other runs' artifacts.
-    // The orchestrator must copy just the run being built into build-input/ (not implemented yet).
+    // Least privilege: the build role reads only build-input/* and writes only build-output/*,
+    // never runs/* (other runs' artifacts). CodeBuildGateRunner puts one run's source in build-input/.
     bucket.grantRead(project, 'build-input/*');
+    bucket.grantWrite(project, 'build-output/*');
 
     cdk.Tags.of(this).add('ManagedBy', 'cloud-engineer');
     new cdk.CfnOutput(this, 'RunsTableName', { value: table.tableName });
