@@ -4,10 +4,13 @@
 
 <p align="center">
   <a href="https://github.com/Alejo2075/aws-cloud-engineer/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Alejo2075/aws-cloud-engineer/ci.yml?branch=main&label=CI&labelColor=0b1d26&style=flat"></a>
-  <a href="https://github.com/Alejo2075/aws-cloud-engineer/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Alejo2075/aws-cloud-engineer?include_prereleases&color=5FDC8C&labelColor=0b1d26&style=flat"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-4FD0C8?labelColor=0b1d26&style=flat"></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-43C2E4?labelColor=0b1d26&style=flat&logo=typescript&logoColor=white">
-  <img alt="Amazon Bedrock" src="https://img.shields.io/badge/Amazon-Bedrock-3AB4F6?labelColor=0b1d26&style=flat&logo=amazonaws&logoColor=white">
+  <a href="https://github.com/Alejo2075/aws-cloud-engineer/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Alejo2075/aws-cloud-engineer?include_prereleases&color=7FE04A&labelColor=0b1d26&style=flat"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-62DC86?labelColor=0b1d26&style=flat"></a>
+  <img alt="Node.js 22+" src="https://img.shields.io/badge/Node.js-22%2B-55D9A8?labelColor=0b1d26&style=flat&logo=nodedotjs&logoColor=white">
+  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-4FD0C8?labelColor=0b1d26&style=flat&logo=typescript&logoColor=white">
+  <img alt="AWS CDK" src="https://img.shields.io/badge/AWS-CDK-47C7DB?labelColor=0b1d26&style=flat">
+  <img alt="Amazon Bedrock" src="https://img.shields.io/badge/Amazon-Bedrock-40BDEB?labelColor=0b1d26&style=flat">
+  <a href="https://awslambdahackathon.devpost.com/"><img alt="AWS Lambda Hackathon" src="https://img.shields.io/badge/AWS_Lambda-Hackathon-3AB4F6?labelColor=0b1d26&style=flat"></a>
 </p>
 
 Cloud Engineer is a serverless AI system that turns a natural-language prompt into a tested AWS application: an API Gateway + Lambda + DynamoDB + Cognito project defined with AWS CDK. It plans a validated blueprint, generates the code, runs the quality gates, and stops at an approval that is bound to the exact deployment plan before anything is deployed. The result comes with its source, test evidence and a machine-readable hand-off manifest.
