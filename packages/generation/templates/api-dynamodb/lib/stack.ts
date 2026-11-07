@@ -2,14 +2,10 @@ import * as cdk from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import type { Construct } from 'constructs';
 import { ENTITIES, routeFor } from '../src/lambda/entities.js';
 
@@ -17,8 +13,6 @@ export interface AppStackProps extends cdk.StackProps {
   stage: string;
   /** Defaults to the esbuild output in dist/lambda. */
   code?: lambda.Code;
-  /** Static frontend directory. Defaults to ./frontend. */
-  frontendPath?: string;
 }
 
 export class AppStack extends cdk.Stack {
@@ -64,60 +58,7 @@ export class AppStack extends cdk.Stack {
     });
     table.grantReadWriteData(fn);
 
-    // Static frontend: private bucket served only through CloudFront (origin access control).
-    const siteBucket = new s3.Bucket(this, 'Site', {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      removalPolicy: isStaging ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN,
-      autoDeleteObjects: isStaging,
-    });
-    const headers = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
-      securityHeadersBehavior: {
-        contentSecurityPolicy: {
-          contentSecurityPolicy: [
-            "default-src 'self'",
-            `connect-src 'self' https://*.execute-api.${this.region}.amazonaws.com https://cognito-idp.${this.region}.amazonaws.com`,
-            "frame-ancestors 'none'",
-            "base-uri 'none'",
-          ].join('; '),
-          override: true,
-        },
-        strictTransportSecurity: {
-          accessControlMaxAge: cdk.Duration.days(365),
-          includeSubdomains: true,
-          override: true,
-        },
-        contentTypeOptions: { override: true },
-        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
-        referrerPolicy: {
-          referrerPolicy: cloudfront.HeadersReferrerPolicy.NO_REFERRER,
-          override: true,
-        },
-      },
-    });
-    const distribution = new cloudfront.Distribution(this, 'Cdn', {
-      defaultRootObject: 'index.html',
-      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
-      defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        responseHeadersPolicy: headers,
-      },
-    });
-
     const api = new apigwv2.HttpApi(this, 'HttpApi', {
-      corsPreflight: {
-        allowOrigins: [`https://${distribution.distributionDomainName}`],
-        allowMethods: [
-          apigwv2.CorsHttpMethod.GET,
-          apigwv2.CorsHttpMethod.POST,
-          apigwv2.CorsHttpMethod.PUT,
-          apigwv2.CorsHttpMethod.DELETE,
-        ],
-        allowHeaders: ['authorization', 'content-type'],
-        maxAge: cdk.Duration.hours(1),
-      },
       defaultAuthorizer: new HttpJwtAuthorizer('Jwt', userPool.userPoolProviderUrl, {
         jwtAudience: [client.userPoolClientId],
       }),
@@ -141,27 +82,10 @@ export class AppStack extends cdk.Stack {
       throttlingRateLimit: 25,
     };
 
-    new s3deploy.BucketDeployment(this, 'DeploySite', {
-      sources: [
-        s3deploy.Source.asset(props.frontendPath ?? 'frontend'),
-        s3deploy.Source.jsonData('config.json', {
-          name: this.stackName,
-          region: this.region,
-          apiUrl: api.apiEndpoint,
-          userPoolClientId: client.userPoolClientId,
-          entities: ENTITIES,
-        }),
-      ],
-      destinationBucket: siteBucket,
-      distribution,
-      distributionPaths: ['/*'],
-    });
-
     cdk.Tags.of(this).add('Project', this.stackName);
     cdk.Tags.of(this).add('Environment', props.stage);
     cdk.Tags.of(this).add('ManagedBy', 'cloud-engineer');
 
-    new cdk.CfnOutput(this, 'SiteUrl', { value: `https://${distribution.distributionDomainName}` });
     new cdk.CfnOutput(this, 'ApiUrl', { value: api.apiEndpoint });
     new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: client.userPoolClientId });

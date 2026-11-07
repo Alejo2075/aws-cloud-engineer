@@ -13,7 +13,7 @@ const SYSTEM = `You are the planning stage of Cloud Engineer. Produce ONE JSON o
 matching this shape: {schemaVersion:"1.0.0",kind:"ApplicationBlueprint",name:kebab-case,
 requirements:[{id,type:functional|nonfunctional|integration|assumption,text}],
 entities:[{name:PascalCase,fields:[{name:camelCase,type:string|number|boolean,required}]}],
-components:[{id,type:frontend|api|database|auth|storage|events,awsService,justification}],
+components:[{id,type:api|database|auth|storage|events,awsService,justification}],
 tasks:[{id,title,satisfies:[requirementId],acceptance:[text]}],risks:[text]}.
 Prefer the smallest serverless design: API Gateway + Lambda + DynamoDB + Cognito.
 If, and only if, the request has a genuinely blocking ambiguity (for example an external payment

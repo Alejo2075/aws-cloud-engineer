@@ -24,7 +24,7 @@ Validation: `pnpm typecheck && pnpm lint && pnpm format && pnpm test`.
 ## M2 — Durable engineering (not started)
 
 Step Functions Standard workflow around the existing stage functions; Lambda workers; CodeBuild for
-gates; DynamoDB `RunStore`; S3 artifact store; EventBridge events; pause/resume/cancel; frontend.
+gates; DynamoDB `RunStore`; S3 artifact store; EventBridge events; pause/resume/cancel.
 
 ## Definition of done (per feature)
 

@@ -101,10 +101,6 @@ export function createDeploymentPlan(input: {
     risks.push('Creates IAM roles (least-privilege review recorded in findings).');
     requiresApprovalFor.push('iam-creation');
   }
-  if (types.has('AWS::CloudFront::Distribution')) {
-    risks.push('Publishes a public static website through CloudFront (private S3 origin).');
-    requiresApprovalFor.push('public-website');
-  }
   if (types.has('AWS::ApiGatewayV2::Api')) {
     risks.push('Exposes a public HTTPS endpoint; routes require a Cognito JWT.');
     requiresApprovalFor.push('public-endpoint');
@@ -347,49 +343,6 @@ export async function verifyApi(
         detail: err instanceof Error ? err.message : String(err),
       });
     }
-  }
-  return { verified: checks.every((c) => c.passed), checkedAt: now().toISOString(), checks };
-}
-
-/**
- * Black-box check of the deployed static site: HTTPS, reachable, security headers present, and a
- * config.json that points at an API. Complements `verifyApi`.
- */
-export async function verifySite(
-  siteUrl: string,
-  fetchImpl: typeof fetch = fetch,
-  now: () => Date = () => new Date(),
-): Promise<VerificationReport> {
-  const base = siteUrl.replace(/\/$/, '');
-  const checks: VerificationCheck[] = [
-    { name: 'site https', passed: siteUrl.startsWith('https://'), detail: siteUrl },
-  ];
-  try {
-    const home = await fetchImpl(`${base}/`, { signal: AbortSignal.timeout(15_000) });
-    checks.push({
-      name: 'site returns 200',
-      passed: home.status === 200,
-      detail: `status ${home.status}`,
-    });
-    for (const h of ['content-security-policy', 'strict-transport-security']) {
-      checks.push({ name: `site sends ${h}`, passed: home.headers.has(h), detail: h });
-    }
-    const cfgRes = await fetchImpl(`${base}/config.json`, { signal: AbortSignal.timeout(15_000) });
-    const cfg = (await cfgRes.json().catch(() => ({}))) as { apiUrl?: unknown };
-    checks.push({
-      name: 'config.json points at an https API',
-      passed:
-        cfgRes.status === 200 &&
-        typeof cfg.apiUrl === 'string' &&
-        cfg.apiUrl.startsWith('https://'),
-      detail: `status ${cfgRes.status}`,
-    });
-  } catch (err) {
-    checks.push({
-      name: 'site reachable',
-      passed: false,
-      detail: err instanceof Error ? err.message : String(err),
-    });
   }
   return { verified: checks.every((c) => c.passed), checkedAt: now().toISOString(), checks };
 }

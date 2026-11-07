@@ -20,11 +20,7 @@ can cost money or affect data.
 
 ## Generated application controls
 
-Routes require a Cognito JWT and items are scoped to the token's `sub`. The site bucket is private (served via
-CloudFront origin access control, TLS-only); responses carry CSP (`default-src 'self'`, connections limited to
-API Gateway and Cognito in the deployment region), HSTS, `X-Content-Type-Options`, frame-deny and no-referrer.
-API CORS allows only the site's CloudFront origin. The client writes DOM with `textContent`, never `innerHTML`.
-Known exception: the site deployment role needs `cloudfront:CreateInvalidation` on `*` (a CDK requirement).
+Routes require a Cognito JWT and items are scoped to the token's `sub`. Generated apps are API only: there is no website, CDN or public bucket, and the API sends no CORS headers. The stack has no wildcard-resource IAM statements (tested).
 
 ## Deploy role you must create (control-plane deployments)
 

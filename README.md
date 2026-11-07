@@ -1,12 +1,12 @@
 # Cloud Engineer
 
 Open-source engine that turns a natural-language request into a reviewed, tested AWS application
-(API Gateway + Lambda + DynamoDB + Cognito + a CloudFront-hosted static frontend, defined with AWS CDK), and stops at an explicit,
+(API Gateway + Lambda + DynamoDB + Cognito, API only, defined with AWS CDK), and stops at an explicit,
 hash-bound approval gate before anything is deployed.
 
 > **Status: `0.1.0` pre-release (M0 + local M1 slice).** The local, single-machine pipeline works and is
-> tested. The cloud control plane (Step Functions, CodeBuild workers, DynamoDB/S3 persistence), frontend
-> generation, and a real end-to-end deployment have **not** been built or verified yet. See
+> tested. The cloud control plane (Step Functions, CodeBuild workers, DynamoDB/S3 persistence)
+> and a real end-to-end deployment have **not** been built or verified yet. See
 > [Known limitations](#known-limitations).
 
 ## What works today
@@ -90,7 +90,7 @@ manifest JSON Schema. `examples/reservation-app` — blueprint and its generated
   tests, and CodeBuild gates and S3 artifacts are selectable through environment variables. A Step Functions workflow, a worker Lambda and an IAM-authenticated HTTP API are defined (`infra/src/api-stack.ts`, opt-in with `-c modelId=... -c bedrockModelArns=...`) and synthesize, but none of it has been deployed or run against AWS, and the control plane deploys only when synthesized with `-c deployAccounts=...` (a CodeBuild deployer assumes a role you create in each listed account; see `docs/security-model.md`). Without it the worker's deployer refuses, and deploying happens through the local CLI.
   Gates still run on your machine with an environment sandbox (empty `HOME`, no AWS credentials), not a
   container or microVM boundary.
-- Frontend is a plain static page (no React/Next.js), one template (API + DynamoDB + Cognito).
+- Generated apps are API only (no web page, no CORS); there is one template (API + DynamoDB + Cognito).
 - Repair loop is implemented and unit-tested but unproven against real model output.
 
 ## Documentation
