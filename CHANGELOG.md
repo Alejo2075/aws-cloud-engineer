@@ -6,6 +6,7 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 
 ### Added
 
+- Opt-in S3 artifact storage in the pipeline (`CLOUD_ENGINEER_BUCKET`): artifacts are written to and read back from the store with hash verification; the stored plan is re-hashed against the hash approval binds to. Local files remain the default. Offline-tested with a fake S3 client.
 - `CodeBuildGateRunner`: runs the quality gates in the `infra/` CodeBuild project (per-run source upload, bounded wait, `cdk.out` download with path-escape and size checks). Opt-in via `CLOUD_ENGINEER_BUILD_PROJECT` + `CLOUD_ENGINEER_BUCKET`. The build role may now write `build-output/*` (never `runs/*`). Offline-tested with fakes; not verified against live CodeBuild.
 - `export --push <url>` pushes the exported repository as `main` to an https/ssh/file remote using your own git credentials. URLs with embedded credentials are rejected, nothing is force-pushed, and a diverged remote makes the export fail. Tested against a local bare repository only (no GitHub).
 - `NEEDS_INPUT` flow: the planner may ask up to 3 blocking questions in total; the run pauses at its stage, `respond` records the answers as a persisted `decisions.json` and continues. After the budget the model must use documented defaults. Cancel works while waiting.

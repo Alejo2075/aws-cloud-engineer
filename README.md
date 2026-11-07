@@ -71,7 +71,7 @@ node apps/cli/dist/index.js create "Build a booking app" --account 123456789012 
 
 `resume <runId>` retries a failed run from its failed stage (never after approval: deployments are not replayed).
 Set `CLOUD_ENGINEER_TABLE` to keep run metadata in DynamoDB instead of local files (uses your AWS credentials).
-Set `CLOUD_ENGINEER_BUILD_PROJECT` and `CLOUD_ENGINEER_BUCKET` to run the quality gates in the CodeBuild project from `infra/` instead of locally (uses your AWS credentials; offline-tested only).
+Set `CLOUD_ENGINEER_BUCKET` to store run artifacts in that S3 bucket (KMS, hash-checked reads; the generated source stays local). Adding `CLOUD_ENGINEER_BUILD_PROJECT` also runs the quality gates in the CodeBuild project from `infra/` instead of locally. Both use your AWS credentials and are offline-tested only.
 
 ## Layout
 
@@ -87,7 +87,7 @@ manifest JSON Schema. `examples/reservation-app` — blueprint and its generated
   author's account had no usable model, so a model-planned run has not completed.
 - Cloud control plane is partial and **not deployed or tested against AWS**: `DynamoRunStore`, `S3ArtifactStore`
   and an `infra/` CDK stack (table, encrypted bucket, event bus, CodeBuild gate project) exist with offline
-  tests, and CodeBuild gates are selectable through environment variables (S3 artifacts are not wired in), but none of it has run against AWS, and there is no Step Functions workflow or Lambda workers.
+  tests, and CodeBuild gates are selectable through environment variables (artifacts can go to S3 via an environment variable), but none of it has run against AWS, and there is no Step Functions workflow or Lambda workers.
   Gates still run on your machine with an environment sandbox (empty `HOME`, no AWS credentials), not a
   container or microVM boundary.
 - Frontend is a plain static page (no React/Next.js), one template (API + DynamoDB + Cognito).

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { ArtifactRef } from '@cloud-engineer/contracts';
 import { CloudEngineerError } from '@cloud-engineer/shared';
 import type { DocClient } from './dynamo-store.js';
@@ -43,6 +43,17 @@ export class S3ArtifactStore {
     return { kind, uri: `s3://${this.bucket}/${key}`, sha256, createdAt: this.now().toISOString() };
   }
 
+  /** Reads an artifact by name without a hash check; callers must verify what they read. */
+  async read(runId: string, name: string): Promise<string> {
+    const res = (await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: this.key(runId, name) }),
+    )) as {
+      Body?: { transformToString(): Promise<string> };
+    };
+    if (!res.Body) throw new CloudEngineerError('NOT_FOUND', `Artifact ${name} not found`);
+    return res.Body.transformToString();
+  }
+
   /** Reads an artifact and refuses content whose hash differs from the reference. */
   async get(ref: ArtifactRef): Promise<string> {
     const prefix = `s3://${this.bucket}/`;
@@ -64,4 +75,9 @@ export class S3ArtifactStore {
     }
     return text;
   }
+}
+
+/** Builds the store with the caller's own AWS credentials (default provider chain). */
+export function createS3ArtifactStore(opts: { region: string; bucket: string }): S3ArtifactStore {
+  return new S3ArtifactStore(new S3Client({ region: opts.region }), opts.bucket);
 }

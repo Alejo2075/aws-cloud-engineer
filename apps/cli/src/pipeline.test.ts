@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FixtureProvider } from '@cloud-engineer/planning';
+import { S3ArtifactStore } from '@cloud-engineer/providers';
 import { FileRunStore, WorkflowEngine } from '@cloud-engineer/workflow';
 import type { DeployDeps } from '@cloud-engineer/deployment';
 import {
@@ -349,5 +350,66 @@ describe('needs input', () => {
     );
     expect(provider.calls[1]!.user).toContain('Do not ask questions');
     expect((await ctx.d.engine.getRun(waiting.runId)).status).toBe('FAILED');
+  });
+});
+
+describe('S3 artifact store', () => {
+  /** In-memory stand-in for S3 keyed by object key. */
+  function fakeS3() {
+    const objects = new Map<string, string>();
+    const client = {
+      send: async (c: { constructor: { name: string }; input: { Key: string; Body?: string } }) => {
+        if (c.constructor.name === 'PutObjectCommand') {
+          objects.set(c.input.Key, String(c.input.Body));
+          return {};
+        }
+        const text = objects.get(c.input.Key);
+        return text === undefined ? {} : { Body: { transformToString: async () => text } };
+      },
+    };
+    return { objects, store: new S3ArtifactStore(client, 'bkt') };
+  }
+
+  it('keeps run artifacts in the store, deploys, and exports without a local artifacts dir', async () => {
+    const { objects, store } = fakeS3();
+    const { d, root } = await setup({ artifacts: store });
+    const run = await createRun(d, opts);
+    expect(run.artifacts.every((a) => a.uri.startsWith('s3://bkt/runs/'))).toBe(true);
+    expect([...objects.keys()]).toEqual(
+      expect.arrayContaining([
+        `runs/${run.runId}/artifacts/blueprint.json`,
+        `runs/${run.runId}/artifacts/plan.json`,
+      ]),
+    );
+    await expect(readdir(join(root, 'runs', run.runId, 'artifacts'))).rejects.toThrow();
+
+    const { hash } = await loadPlan(d, run.runId);
+    const res = await approveAndDeploy(d, run.runId, {
+      planHash: hash,
+      environment: 'staging',
+      actor: 'me',
+    });
+    expect(res).toMatchObject({ deployed: true, verified: true });
+    const out = join(root, 'export');
+    await exportRun(d, run.runId, out);
+    expect(await readdir(out)).toContain('cloud-system-manifest.json');
+  });
+
+  it('detects a tampered plan or blueprint in the store and never deploys', async () => {
+    const { objects, store } = fakeS3();
+    const { d, execCalls } = await setup({ artifacts: store });
+    const run = await createRun(d, opts);
+    const planKey = `runs/${run.runId}/artifacts/plan.json`;
+    const plan = JSON.parse(objects.get(planKey)!);
+    objects.set(planKey, JSON.stringify({ ...plan, region: 'eu-west-1' }));
+    await expect(loadPlan(d, run.runId)).rejects.toThrow(/does not match its recorded hash/);
+    await expect(
+      approveAndDeploy(d, run.runId, {
+        planHash: run.artifacts.findLast((a) => a.kind === 'plan')!.sha256,
+        environment: 'staging',
+        actor: 'me',
+      }),
+    ).rejects.toThrow();
+    expect(execCalls).toHaveLength(0);
   });
 });
