@@ -149,6 +149,12 @@ async function readJson<T>(d: PipelineDeps, runId: string, name: string): Promis
  * run FAILED with evidence; `resumeRun` can retry from the stage that failed.
  */
 export async function createRun(d: PipelineDeps, opts: CreateOptions): Promise<Run> {
+  const run = await initRun(d, opts);
+  return advance(d, run.runId);
+}
+
+/** Creates the run and persists its intake without doing any work (an executor advances it). */
+export async function initRun(d: PipelineDeps, opts: CreateOptions): Promise<Run> {
   if (!/^\d{12}$/.test(opts.accountId)) {
     throw new CloudEngineerError(
       'VALIDATION_FAILED',
@@ -166,7 +172,7 @@ export async function createRun(d: PipelineDeps, opts: CreateOptions): Promise<R
   };
   await saveArtifact(d, run, 'prompt', 'prompt.txt', opts.prompt);
   await saveArtifact(d, run, 'prompt', 'intake.json', JSON.stringify(intake, null, 2));
-  return advance(d, run.runId);
+  return run;
 }
 
 /**

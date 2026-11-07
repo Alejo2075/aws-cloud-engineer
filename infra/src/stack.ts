@@ -13,6 +13,11 @@ import type { Construct } from 'constructs';
  * The Step Functions workflow and Lambda workers are not part of this stack yet.
  */
 export class ControlPlaneStack extends cdk.Stack {
+  readonly key: kms.Key;
+  readonly table: dynamodb.Table;
+  readonly bucket: s3.Bucket;
+  readonly gateProject: codebuild.Project;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -77,6 +82,11 @@ export class ControlPlaneStack extends cdk.Stack {
     // never runs/* (other runs' artifacts). CodeBuildGateRunner puts one run's source in build-input/.
     bucket.grantRead(project, 'build-input/*');
     bucket.grantWrite(project, 'build-output/*');
+
+    this.key = key;
+    this.table = table;
+    this.bucket = bucket;
+    this.gateProject = project;
 
     cdk.Tags.of(this).add('ManagedBy', 'cloud-engineer');
     new cdk.CfnOutput(this, 'RunsTableName', { value: table.tableName });
