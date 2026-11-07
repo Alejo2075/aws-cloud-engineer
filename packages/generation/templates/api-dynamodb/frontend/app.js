@@ -85,7 +85,15 @@ function renderEntities() {
     form.append(add);
 
     const refresh = async () => {
-      const { items } = await api('GET', `/${routeFor(entity)}`);
+      const items = [];
+      let cursor = '';
+      // Bounded so a misbehaving server cannot make the page loop forever.
+      for (let page = 0; page < 20; page++) {
+        const res = await api('GET', `/${routeFor(entity)}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`);
+        items.push(...res.items);
+        cursor = res.nextCursor ?? '';
+        if (!cursor) break;
+      }
       list.replaceChildren();
       for (const item of items) {
         const li = document.createElement('li');

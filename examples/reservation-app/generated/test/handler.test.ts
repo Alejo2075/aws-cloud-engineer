@@ -10,10 +10,18 @@ class MemoryRepo implements Repo {
   async get(pk: string, sk: string) {
     return this.rows.get(`${pk}|${sk}`);
   }
-  async list(pk: string, prefix: string) {
-    return [...this.rows.entries()]
+  async list(pk: string, prefix: string, page: { limit: number; afterSk?: string }) {
+    const rows = [...this.rows.entries()]
       .filter(([k]) => k.startsWith(`${pk}|${prefix}`))
-      .map(([, v]) => v);
+      .map(([k, v]) => [k.slice(pk.length + 1), v] as const)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .filter(([sk]) => page.afterSk === undefined || sk > page.afterSk);
+    const slice = rows.slice(0, page.limit);
+    const last = slice.at(-1);
+    return {
+      items: slice.map(([, v]) => v),
+      ...(rows.length > page.limit && last ? { lastSk: last[0] } : {}),
+    };
   }
   async remove(pk: string, sk: string) {
     this.rows.delete(`${pk}|${sk}`);
@@ -25,8 +33,15 @@ const base = `/${routeFor(entity)}`;
 const validBody = Object.fromEntries(
   entity.fields.map((f) => [f.name, f.type === 'number' ? 1 : f.type === 'boolean' ? true : 'x']),
 );
-const ev = (method: string, path: string, sub: string | undefined, body?: unknown): HttpEvent => ({
+const ev = (
+  method: string,
+  path: string,
+  sub: string | undefined,
+  body?: unknown,
+  query?: Record<string, string>,
+): HttpEvent => ({
   rawPath: path,
+  queryStringParameters: query ?? null,
   body: body === undefined ? null : JSON.stringify(body),
   requestContext: {
     http: { method },
@@ -74,5 +89,26 @@ describe('generated API handler', () => {
     expect((await h(ev('GET', '/nope', 'u1'))).statusCode).toBe(404);
     expect((await h(ev('GET', `${base}/../x`, 'u1'))).statusCode).toBe(404);
     expect((await h(ev('PUT', base, 'u1', validBody))).statusCode).toBe(405);
+  });
+
+  it('paginates listings with an opaque cursor and validates its inputs', async () => {
+    const h = createHandler(new MemoryRepo());
+    for (let i = 0; i < 3; i++) await h(ev('POST', base, 'u1', validBody));
+    const first = JSON.parse((await h(ev('GET', base, 'u1', undefined, { limit: '2' }))).body);
+    expect(first.items).toHaveLength(2);
+    expect(typeof first.nextCursor).toBe('string');
+    const second = JSON.parse(
+      (await h(ev('GET', base, 'u1', undefined, { limit: '2', cursor: first.nextCursor }))).body,
+    );
+    expect(second.items).toHaveLength(1);
+    expect(second.nextCursor).toBeUndefined();
+    const ids = [...first.items, ...second.items].map((x: { id: string }) => x.id);
+    expect(new Set(ids).size).toBe(3);
+
+    for (const limit of ['0', '101', 'abc', '1.5']) {
+      expect((await h(ev('GET', base, 'u1', undefined, { limit }))).statusCode).toBe(400);
+    }
+    const foreign = Buffer.from('Other#00000000-0000-0000-0000-000000000000').toString('base64url');
+    expect((await h(ev('GET', base, 'u1', undefined, { cursor: foreign }))).statusCode).toBe(400);
   });
 });
