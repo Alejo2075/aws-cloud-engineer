@@ -42,6 +42,10 @@ timeout) and downloads `cdk.out`. The CLI uses it only when `CLOUD_ENGINEER_BUIL
 `CLOUD_ENGINEER_BUCKET` are set. None of it has run against AWS; the CodeBuild API behavior (per-run overrides,
 artifact layout) is unverified.
 
+`infra/src/workflow.ts` defines `RunWorkflow`, a Standard Step Functions state machine (advance -> wait for answers / wait
+for approval with task tokens -> deploy -> verify, with explicit failure and cancel paths and no automatic retry of
+`deploy`). It fixes the worker contract but has no worker behind it and is not included in `ControlPlaneStack`.
+
 ## Target (not built)
 
 API Gateway + Lambda → Step Functions Standard → Bedrock / ephemeral CodeBuild / deployment worker,
