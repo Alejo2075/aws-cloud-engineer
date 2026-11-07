@@ -4,6 +4,8 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-07
+
 ### Removed
 
 - All frontend support: the generated static web page (`frontend/`), its private S3 bucket and CloudFront distribution, the CORS configuration, the `public-website` approval gate, `verifySite` and its pipeline check, and the `frontend` component type in blueprints. Generated apps are API only (Cognito-protected HTTP API + Lambda + DynamoDB). The example was regenerated. Existing blueprints that declare a `frontend` component no longer validate.
