@@ -59,14 +59,14 @@ node apps/cli/dist/index.js create "Build a booking app" --account 123456789012 
 
 ## CLI
 
-| Command                                                | Purpose                                                 |
-| ------------------------------------------------------ | ------------------------------------------------------- |
-| `create <prompt> --account <id> [--blueprint f]`       | Plan → generate → build/test → plan; stops for approval |
-| `status <runId>` · `runs list` · `runs artifacts <id>` | Inspect persisted state                                 |
-| `approve <runId> --plan-hash <h> --environment <e>`    | Approve that exact plan **and deploy it**               |
-| `resume <runId>`                                       | Retry a failed run from its failed stage                |
-| `cancel <runId>`                                       | Cancel an active run                                    |
-| `export <runId> --output <dir>`                        | Source + `cloud-system-manifest.json`                   |
+| Command                                                | Purpose                                                               |
+| ------------------------------------------------------ | --------------------------------------------------------------------- |
+| `create <prompt> --account <id> [--blueprint f]`       | Plan → generate → build/test → plan; stops for approval               |
+| `status <runId>` · `runs list` · `runs artifacts <id>` | Inspect persisted state                                               |
+| `approve <runId> --plan-hash <h> --environment <e>`    | Approve that exact plan **and deploy it**                             |
+| `resume <runId>`                                       | Retry a failed run from its failed stage                              |
+| `cancel <runId>`                                       | Cancel an active run                                                  |
+| `export <runId> --output <dir> [--git]`                | Source + `cloud-system-manifest.json`; `--git` makes one local commit |
 
 `resume <runId>` retries a failed run from its failed stage (never after approval: deployments are not replayed).
 Set `CLOUD_ENGINEER_TABLE` to keep run metadata in DynamoDB instead of local files (uses your AWS credentials).

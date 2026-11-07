@@ -1,4 +1,6 @@
+import { execFile } from 'node:child_process';
 import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
 import { CloudSystemManifestSchema, type CloudSystemManifest } from '@cloud-engineer/contracts';
@@ -107,4 +109,49 @@ export async function exportProject(
     written.push(path);
   }
   return written;
+}
+
+const run = promisify(execFile);
+
+/**
+ * Initializes a fresh git repository in `dir` with one commit and returns its revision.
+ * Ignores the user's git configuration and hooks so the result is reproducible and no
+ * code from the environment runs; refuses to touch a directory that is already a repository.
+ */
+export async function initGitRepository(dir: string, message = 'Initial commit'): Promise<string> {
+  const cwd = resolve(dir);
+  const env = {
+    PATH: process.env.PATH ?? '',
+    HOME: cwd,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_SYSTEM: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+  };
+  const git = (...args: string[]) =>
+    run(
+      'git',
+      [
+        '-c',
+        'core.hooksPath=/dev/null',
+        '-c',
+        'user.name=Cloud Engineer',
+        '-c',
+        'user.email=cloud-engineer@users.noreply.invalid',
+        '-c',
+        'commit.gpgsign=false',
+        ...args,
+      ],
+      { cwd, env },
+    );
+  const exists = await git('rev-parse', '--git-dir').then(
+    () => true,
+    () => false,
+  );
+  if (exists) {
+    throw new CloudEngineerError('CONFLICT', `${cwd} is already inside a git repository`);
+  }
+  await git('init', '-q', '-b', 'main');
+  await git('add', '-A');
+  await git('commit', '-q', '-m', message);
+  return (await git('rev-parse', 'HEAD')).stdout.trim();
 }

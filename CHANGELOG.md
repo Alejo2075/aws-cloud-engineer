@@ -6,6 +6,7 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 
 ### Added
 
+- `export --git` initializes a local git repository with one commit (ignores user git config and hooks; refuses an existing repository). No remote push.
 - Generated APIs support `PUT /<name>s/{id}` (replaces declared fields, keeps `id`/`createdAt`, sets `updatedAt`; 404 for other users' items).
 - Generated list endpoints are paginated (`?limit=1..100`, default 50; opaque `nextCursor`, validated to stay inside the entity's key range). The generated frontend follows cursors (bounded to 20 pages).
 

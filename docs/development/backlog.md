@@ -9,4 +9,4 @@
 7. Upgrade the frontend to React/Next.js static export; custom domain + WAF; Cognito hosted UI.
 8. PATCH (partial update) and conditional writes in the generated API.
 9. Cost estimate from the Pricing API instead of qualitative notes.
-10. Git adapter for repository output.
+10. Git forge adapters (push to GitHub etc.); local `export --git` already exists.
