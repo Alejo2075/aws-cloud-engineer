@@ -64,6 +64,7 @@ node apps/cli/dist/index.js create "Build a booking app" --account 123456789012 
 | `create <prompt> --account <id> [--blueprint f]`       | Plan → generate → build/test → plan; stops for approval               |
 | `status <runId>` · `runs list` · `runs artifacts <id>` | Inspect persisted state                                               |
 | `approve <runId> --plan-hash <h> --environment <e>`    | Approve that exact plan **and deploy it**                             |
+| `respond <runId> --answer <a>...`                      | Answer the questions a `NEEDS_INPUT` run is waiting on                |
 | `resume <runId>`                                       | Retry a failed run from its failed stage                              |
 | `cancel <runId>`                                       | Cancel an active run                                                  |
 | `export <runId> --output <dir> [--git]`                | Source + `cloud-system-manifest.json`; `--git` makes one local commit |
