@@ -4,12 +4,18 @@ import { ENTITIES, routeFor, type EntityDef } from './entities.js';
 export interface Repo {
   put(pk: string, sk: string, item: Record<string, unknown>): Promise<void>;
   get(pk: string, sk: string): Promise<Record<string, unknown> | undefined>;
-  list(pk: string, skPrefix: string): Promise<Record<string, unknown>[]>;
+  /** One page in sort-key order; `lastSk` is set only when more items may follow. */
+  list(
+    pk: string,
+    skPrefix: string,
+    page: { limit: number; afterSk?: string },
+  ): Promise<{ items: Record<string, unknown>[]; lastSk?: string }>;
   remove(pk: string, sk: string): Promise<void>;
 }
 
 export interface HttpEvent {
   rawPath: string;
+  queryStringParameters?: Record<string, string | undefined> | null;
   body?: string | null;
   isBase64Encoded?: boolean;
   requestContext: {
@@ -24,6 +30,8 @@ export interface HttpResult {
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
 const ID_PATTERN = /^[0-9a-f-]{36}$/;
 
 const respond = (statusCode: number, payload: unknown): HttpResult => ({
@@ -58,6 +66,9 @@ export function validate(
   return errors.length ? { ok: false, errors } : { ok: true, value };
 }
 
+const encodeCursor = (sk: string) => Buffer.from(sk, 'utf8').toString('base64url');
+const decodeCursor = (cursor: string) => Buffer.from(cursor, 'base64url').toString('utf8');
+
 const publicItem = (item: Record<string, unknown>) => {
   const { pk: _pk, sk: _sk, ...rest } = item;
   return rest;
@@ -77,8 +88,22 @@ export function createHandler(repo: Repo, now: () => Date = () => new Date()) {
     const method = event.requestContext.http.method;
 
     if (id === undefined && method === 'GET') {
-      const items = await repo.list(pk, `${entity.name}#`);
-      return respond(200, { items: items.map(publicItem) });
+      const query = event.queryStringParameters ?? {};
+      const limit = query.limit === undefined ? DEFAULT_PAGE_SIZE : Number(query.limit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE) {
+        return respond(400, { message: `limit must be an integer between 1 and ${MAX_PAGE_SIZE}` });
+      }
+      const prefix = `${entity.name}#`;
+      const afterSk = query.cursor === undefined ? undefined : decodeCursor(query.cursor);
+      // The cursor is client-controlled: it must stay inside this entity's key range.
+      if (afterSk !== undefined && !afterSk.startsWith(prefix)) {
+        return respond(400, { message: 'invalid cursor' });
+      }
+      const page = await repo.list(pk, prefix, { limit, ...(afterSk ? { afterSk } : {}) });
+      return respond(200, {
+        items: page.items.map(publicItem),
+        ...(page.lastSk ? { nextCursor: encodeCursor(page.lastSk) } : {}),
+      });
     }
     if (id === undefined && method === 'POST') {
       const raw = event.body ?? '';

@@ -20,16 +20,18 @@ const repo: Repo = {
     const res = await doc.send(new GetCommand({ TableName: table, Key: { pk, sk } }));
     return res.Item;
   },
-  async list(pk, skPrefix) {
+  async list(pk, skPrefix, { limit, afterSk }) {
     const res = await doc.send(
       new QueryCommand({
         TableName: table,
         KeyConditionExpression: 'pk = :pk AND begins_with(sk, :p)',
         ExpressionAttributeValues: { ':pk': pk, ':p': skPrefix },
-        Limit: 100,
+        Limit: limit,
+        ...(afterSk ? { ExclusiveStartKey: { pk, sk: afterSk } } : {}),
       }),
     );
-    return res.Items ?? [];
+    const lastSk = res.LastEvaluatedKey?.sk as string | undefined;
+    return { items: res.Items ?? [], ...(lastSk ? { lastSk } : {}) };
   },
   async remove(pk, sk) {
     await doc.send(new DeleteCommand({ TableName: table, Key: { pk, sk } }));

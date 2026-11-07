@@ -7,6 +7,6 @@
 5. Step Functions Standard definition + approval callback (task token).
 6. CLI: `runs approve` alias; `NEEDS_INPUT` flow for blocking questions.
 7. Upgrade the frontend to React/Next.js static export; custom domain + WAF; Cognito hosted UI.
-8. Pagination in the generated list endpoint; update expressions.
+8. Update expressions (PUT/PATCH) in the generated API.
 9. Cost estimate from the Pricing API instead of qualitative notes.
 10. Git adapter for repository output.
