@@ -20,19 +20,25 @@ import type { GateReport } from '@cloud-engineer/validation';
 import type { DocClient } from './dynamo-store.js';
 
 const SKIP = new Set(['node_modules', 'cdk.out', 'dist', '.git', 'cdk-outputs.json']);
+/** A workspace keeps cdk.out (the assembly that was planned) but never dependencies or VCS data. */
+const WORKSPACE_SKIP = new Set(['node_modules', '.git']);
 const RUN_ID = /^[A-Za-z0-9-]{1,64}$/;
 const MAX_OUTPUT_OBJECTS = 2000;
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 
 /** Deterministic, uncompressed zip (fixed timestamps, sorted entries) of a project directory. */
-export async function zipDirectory(dir: string): Promise<Buffer> {
+export async function zipDirectory(
+  dir: string,
+  opts: { includeBuildOutput?: boolean } = {},
+): Promise<Buffer> {
+  const skip = opts.includeBuildOutput ? WORKSPACE_SKIP : SKIP;
   const root = resolve(dir);
   const files: string[] = [];
   const walk = async (d: string): Promise<void> => {
     for (const e of (await readdir(d, { withFileTypes: true })).sort((a, b) =>
       a.name.localeCompare(b.name),
     )) {
-      if (SKIP.has(e.name)) continue;
+      if (skip.has(e.name)) continue;
       if (e.isDirectory()) await walk(join(d, e.name));
       else if (e.isFile()) files.push(join(d, e.name));
     }
