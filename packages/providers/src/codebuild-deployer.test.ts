@@ -114,6 +114,25 @@ describe('CodeBuildDeployer', () => {
     );
   });
 
+  it('refuses tooling files at the assembly root and leaves stray root entries out of the upload', async () => {
+    const f = fakes('SUCCEEDED', '{"app-staging":{}}');
+    const bad = await assembly();
+    await writeFile(join(bad, '.npmrc'), 'registry=https://evil.example');
+    await expect(make(f).exec(args, bad, ctx)).rejects.toMatchObject({ code: 'BLOCKED' });
+    expect(f.s3Calls).toHaveLength(0);
+
+    const dir = await assembly();
+    await writeFile(join(dir, 'app-staging.assets.json'), '{}');
+    await writeFile(join(dir, 'notes.sh'), 'stray');
+    const ok = await make(f).exec(args, dir, ctx);
+    expect(ok.exitCode).toBe(0);
+    const body = (f.s3Calls[0]!.input.Body as Buffer).toString('latin1');
+    expect(body).toContain('app.template.json');
+    expect(body).toContain('app-staging.assets.json');
+    expect(body).toContain('bundled dependency'); // asset content still travels whole
+    expect(body).not.toContain('notes.sh');
+  });
+
   it('refuses accounts outside the allow-list without uploading or starting anything', async () => {
     const f = fakes('SUCCEEDED', '{}');
     const d = make(f);

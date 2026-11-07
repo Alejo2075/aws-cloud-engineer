@@ -10,6 +10,8 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 
 - `CodeBuildDeployer` and opt-in per-account `Deployer` CodeBuild projects and roles in `ControlPlaneApiStack` (`-c deployAccounts=...`): uploads the approved assembly (all files), assumes `CloudEngineerDeploy` of that one account inside the build, drops the build role's credentials, verifies the account with `sts:GetCallerIdentity`, and runs the pinned CDK CLI installed outside the assembly with `--ignore-scripts`; outputs are read back from S3. `DeployDeps` gains an optional expected account and deploy context. Verified with fakes and synth only; never run against AWS. Without the option the control plane still refuses to deploy.
 
+- The deployer upload now refuses tooling files (`.npmrc`, `cdk.json`, `cdk.context.json`, `package.json`, `node_modules`) at the assembly root, leaves unknown root entries out, and the build removes `.npmrc`/`cdk.json` from the source directory before deploying.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added
