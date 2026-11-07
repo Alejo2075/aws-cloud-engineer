@@ -17,6 +17,7 @@
     "@aws-sdk/client-sfn": "3.1163.0",
     "@aws-sdk/lib-dynamodb": "3.1163.0",
     "@cloud-engineer/contracts": "workspace:*",
+    "@cloud-engineer/deployment": "workspace:*",
     "@cloud-engineer/planning": "workspace:*",
     "@cloud-engineer/shared": "workspace:*",
     "@cloud-engineer/validation": "workspace:*",

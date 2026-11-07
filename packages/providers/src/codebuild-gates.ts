@@ -29,9 +29,9 @@ const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 /** Deterministic, uncompressed zip (fixed timestamps, sorted entries) of a project directory. */
 export async function zipDirectory(
   dir: string,
-  opts: { includeBuildOutput?: boolean } = {},
+  opts: { includeBuildOutput?: boolean; skip?: ReadonlySet<string> } = {},
 ): Promise<Buffer> {
-  const skip = opts.includeBuildOutput ? WORKSPACE_SKIP : SKIP;
+  const skip = opts.skip ?? (opts.includeBuildOutput ? WORKSPACE_SKIP : SKIP);
   const root = resolve(dir);
   const files: string[] = [];
   const walk = async (d: string): Promise<void> => {

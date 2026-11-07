@@ -87,7 +87,7 @@ manifest JSON Schema. `examples/reservation-app` — blueprint and its generated
   author's account had no usable model, so a model-planned run has not completed.
 - Cloud control plane is partial and **not deployed or tested against AWS**: `DynamoRunStore`, `S3ArtifactStore`
   and an `infra/` CDK stack (table, encrypted bucket, event bus, CodeBuild gate project) exist with offline
-  tests, and CodeBuild gates and S3 artifacts are selectable through environment variables. A Step Functions workflow, a worker Lambda and an IAM-authenticated HTTP API are defined (`infra/src/api-stack.ts`, opt-in with `-c modelId=... -c bedrockModelArns=...`) and synthesize, but none of it has been deployed or run against AWS, and **the control plane cannot deploy applications**: its deployer is a stub that refuses until a CodeBuild deployer assuming a scoped target-account role exists. Deploying still happens through the local CLI.
+  tests, and CodeBuild gates and S3 artifacts are selectable through environment variables. A Step Functions workflow, a worker Lambda and an IAM-authenticated HTTP API are defined (`infra/src/api-stack.ts`, opt-in with `-c modelId=... -c bedrockModelArns=...`) and synthesize, but none of it has been deployed or run against AWS, and the control plane deploys only when synthesized with `-c deployAccounts=...` (a CodeBuild deployer assumes a role you create in each listed account; see `docs/security-model.md`). Without it the worker's deployer refuses, and deploying happens through the local CLI.
   Gates still run on your machine with an environment sandbox (empty `HOME`, no AWS credentials), not a
   container or microVM boundary.
 - Frontend is a plain static page (no React/Next.js), one template (API + DynamoDB + Cognito).

@@ -6,6 +6,19 @@ import { ControlPlaneStack } from './stack.js';
 
 const MODEL_ARN = 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0';
 
+function buildWithDeployer() {
+  const app = new cdk.App();
+  const data = new ControlPlaneStack(app, 'Data');
+  const api = new ControlPlaneApiStack(app, 'Api', {
+    data,
+    modelId: 'example.model-v1:0',
+    bedrockModelArns: [MODEL_ARN],
+    deployTargetAccountIds: ['123456789012'],
+    deployExternalId: 'ext-1',
+  });
+  return Template.fromStack(api);
+}
+
 function build() {
   const app = new cdk.App();
   const data = new ControlPlaneStack(app, 'Data');
@@ -125,5 +138,51 @@ describe('ControlPlaneApiStack', () => {
     expect(
       () => new ControlPlaneApiStack(app, 'Api', { data, modelId: 'm', bedrockModelArns: [] }),
     ).toThrow(/bedrockModelArns/);
+  });
+
+  it('has no deployer unless target accounts are given', () => {
+    t.resourceCountIs('AWS::CodeBuild::Project', 0);
+    const vars = JSON.stringify(
+      Object.values(t.findResources('AWS::Lambda::Function')).map((f) => f.Properties.Environment),
+    );
+    expect(vars).not.toContain('DEPLOY_PROJECT');
+  });
+});
+
+describe('ControlPlaneApiStack deployer', () => {
+  const t = buildWithDeployer();
+
+  it('runs the pinned CDK CLI after assuming the role and checking the account', () => {
+    const project = Object.values(t.findResources('AWS::CodeBuild::Project'))[0]!;
+    const spec = String(project.Properties.Source.BuildSpec);
+    expect(spec).toMatch(/aws-cdk@\d+\.\d+\.\d+ deploy/);
+    expect(spec.indexOf('sts assume-role')).toBeLessThan(spec.indexOf('get-caller-identity'));
+    expect(spec.indexOf('get-caller-identity')).toBeLessThan(spec.indexOf('aws-cdk@'));
+    expect(spec).toContain('EXPECTED_ACCOUNT');
+    expect(spec).not.toMatch(/AKIA/);
+  });
+
+  it('can assume only the named role in the listed accounts', () => {
+    const assume = statements(t).filter((s) => actionsOf(s).includes('sts:AssumeRole'));
+    expect(assume).toHaveLength(1);
+    expect([assume[0]!.Resource].flat()).toEqual([
+      'arn:aws:iam::123456789012:role/CloudEngineerDeploy',
+    ]);
+    // No CloudFormation/IAM permissions of its own: everything runs through the assumed role.
+    expect(
+      statements(t).some((s) => actionsOf(s).some((a) => /^(cloudformation|iam):/.test(a))),
+    ).toBe(false);
+  });
+
+  it('tells the worker how to reach the deployer and lets it start only the two projects', () => {
+    const vars = Object.values(t.findResources('AWS::Lambda::Function')).flatMap((f) =>
+      Object.keys(f.Properties.Environment.Variables),
+    );
+    expect(vars).toEqual(
+      expect.arrayContaining(['DEPLOY_PROJECT', 'DEPLOY_ROLE_NAME', 'DEPLOY_ALLOWED_ACCOUNTS']),
+    );
+    const starts = statements(t).filter((s) => actionsOf(s).includes('codebuild:StartBuild'));
+    expect(starts).toHaveLength(2);
+    for (const s of starts) expect(JSON.stringify(s.Resource)).not.toBe('"*"');
   });
 });
