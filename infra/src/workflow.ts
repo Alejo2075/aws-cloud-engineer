@@ -79,7 +79,8 @@ export class RunWorkflow extends Construct {
 
     const waitInput = waitFor('WaitForInput', 'registerInputWait');
     const waitApproval = waitFor('WaitForApproval', 'registerApprovalWait');
-    const deploy = invoke('Deploy', 'deploy');
+    // The approval decision (plan hash, environment, actor) travels to the worker, which re-checks it.
+    const deploy = invoke('Deploy', 'deploy', { 'decision.$': '$.decision' });
     const verify = invoke('Verify', 'verify');
 
     for (const state of [advance, waitInput, waitApproval, deploy, verify]) {

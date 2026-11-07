@@ -1,7 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from 'vitest';
 import { WorkflowEngine } from '@cloud-engineer/workflow';
-import { DynamoRunStore, S3ArtifactStore, type DocClient } from './index.js';
+import {
+  DynamoRunStore,
+  DynamoTokenStore,
+  S3ArtifactStore,
+  SfnTaskCallbacks,
+  type DocClient,
+} from './index.js';
 
 type Item = Record<string, unknown>;
 
@@ -136,5 +142,45 @@ describe('S3ArtifactStore', () => {
     );
     await expect(s.put('../x', 'plan', 'a.json', '')).rejects.toThrow(/Invalid/);
     await expect(s.put('run-1', 'plan', '../a', '')).rejects.toThrow(/Invalid/);
+  });
+});
+
+describe('DynamoTokenStore and SfnTaskCallbacks', () => {
+  it('hands each parked token to exactly one caller', async () => {
+    const items = new Map<string, Record<string, unknown>>();
+    const client: DocClient = {
+      send: async (c: unknown) => {
+        const { constructor, input } = c as {
+          constructor: { name: string };
+          input: { Item?: Record<string, unknown>; Key?: { pk: string; sk: string } };
+        };
+        const k = input.Item
+          ? `${input.Item.pk}|${input.Item.sk}`
+          : `${input.Key!.pk}|${input.Key!.sk}`;
+        if (constructor.name === 'PutCommand') items.set(k, input.Item!);
+        if (constructor.name === 'DeleteCommand') {
+          const old = items.get(k);
+          items.delete(k);
+          return { Attributes: old };
+        }
+        if (constructor.name === 'GetCommand') return { Item: items.get(k) };
+        return {};
+      },
+    };
+    const store = new DynamoTokenStore(client, 'tbl');
+    await store.save('run-1', 'approval', 'tok');
+    expect(await store.has('run-1', 'approval')).toBe(true);
+    expect(await store.take('run-1', 'approval')).toBe('tok');
+    expect(await store.take('run-1', 'approval')).toBeUndefined();
+    await expect(store.save('../x', 'input', 't')).rejects.toThrow(/Invalid run id/);
+  });
+
+  it('sends the decision as the task output', async () => {
+    const sent: unknown[] = [];
+    const cb = new SfnTaskCallbacks({
+      send: async (c) => void sent.push((c as { input: unknown }).input),
+    });
+    await cb.success('tok', { approved: true });
+    expect(sent).toEqual([{ taskToken: 'tok', output: '{"approved":true}' }]);
   });
 });

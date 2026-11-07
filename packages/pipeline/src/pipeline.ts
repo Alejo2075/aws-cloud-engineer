@@ -213,6 +213,17 @@ export async function respondToInput(
   answers: string[],
   actor = 'local',
 ): Promise<Run> {
+  await recordAnswers(d, runId, answers, actor);
+  return advance(d, runId);
+}
+
+/** Validates and persists the answers and moves the run back to ACTIVE, without continuing it. */
+export async function recordAnswers(
+  d: PipelineDeps,
+  runId: string,
+  answers: string[],
+  actor = 'local',
+): Promise<Run> {
   const run = await d.engine.getRun(runId);
   const questions = await pendingQuestions(d, runId);
   if (run.status !== 'NEEDS_INPUT') {
@@ -230,8 +241,7 @@ export async function respondToInput(
     ...questions.map((question, i) => ({ question, answer: clean[i]! })),
   ];
   await saveArtifact(d, run, 'requirements', 'decisions.json', JSON.stringify(decisions, null, 2));
-  await d.engine.provideInput(runId, actor);
-  return advance(d, runId);
+  return d.engine.provideInput(runId, actor);
 }
 
 /** State-driven loop: each stage's work is idempotent and keyed off persisted artifacts. */

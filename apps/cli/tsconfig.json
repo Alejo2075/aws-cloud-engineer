@@ -6,28 +6,16 @@
       "path": "../../packages/shared"
     },
     {
-      "path": "../../packages/contracts"
-    },
-    {
       "path": "../../packages/workflow"
-    },
-    {
-      "path": "../../packages/planning"
-    },
-    {
-      "path": "../../packages/generation"
-    },
-    {
-      "path": "../../packages/validation"
     },
     {
       "path": "../../packages/deployment"
     },
     {
-      "path": "../../packages/handoff"
+      "path": "../../packages/providers"
     },
     {
-      "path": "../../packages/providers"
+      "path": "../../packages/pipeline"
     }
   ],
   "compilerOptions": {

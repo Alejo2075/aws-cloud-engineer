@@ -35,30 +35,18 @@ importers:
       '@aws-sdk/lib-dynamodb':
         specifier: 3.1163.0
         version: 3.1163.0(@aws-sdk/client-dynamodb@3.1163.0)
-      '@cloud-engineer/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
       '@cloud-engineer/deployment':
         specifier: workspace:*
         version: link:../../packages/deployment
-      '@cloud-engineer/generation':
+      '@cloud-engineer/pipeline':
         specifier: workspace:*
-        version: link:../../packages/generation
-      '@cloud-engineer/handoff':
-        specifier: workspace:*
-        version: link:../../packages/handoff
-      '@cloud-engineer/planning':
-        specifier: workspace:*
-        version: link:../../packages/planning
+        version: link:../../packages/pipeline
       '@cloud-engineer/providers':
         specifier: workspace:*
         version: link:../../packages/providers
       '@cloud-engineer/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@cloud-engineer/validation':
-        specifier: workspace:*
-        version: link:../../packages/validation
       '@cloud-engineer/workflow':
         specifier: workspace:*
         version: link:../../packages/workflow
@@ -123,6 +111,36 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
 
+  packages/pipeline:
+    dependencies:
+      '@cloud-engineer/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@cloud-engineer/deployment':
+        specifier: workspace:*
+        version: link:../deployment
+      '@cloud-engineer/generation':
+        specifier: workspace:*
+        version: link:../generation
+      '@cloud-engineer/handoff':
+        specifier: workspace:*
+        version: link:../handoff
+      '@cloud-engineer/planning':
+        specifier: workspace:*
+        version: link:../planning
+      '@cloud-engineer/providers':
+        specifier: workspace:*
+        version: link:../providers
+      '@cloud-engineer/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@cloud-engineer/validation':
+        specifier: workspace:*
+        version: link:../validation
+      '@cloud-engineer/workflow':
+        specifier: workspace:*
+        version: link:../workflow
+
   packages/planning:
     dependencies:
       '@cloud-engineer/contracts':
@@ -147,6 +165,9 @@ importers:
         specifier: 3.1163.0
         version: 3.1163.0
       '@aws-sdk/client-s3':
+        specifier: 3.1163.0
+        version: 3.1163.0
+      '@aws-sdk/client-sfn':
         specifier: 3.1163.0
         version: 3.1163.0
       '@aws-sdk/lib-dynamodb':
@@ -231,6 +252,10 @@ packages:
 
   '@aws-sdk/client-s3@3.1163.0':
     resolution: {integrity: sha512-exn6SxrqC0NMqJ1YmzbhTDj4hJ4GWnzt2Oq0Rafy2BGSWncFnrquK+RX7mG9DzWxTEyYg/gzbrEk93yvm+ibQA==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-sfn@3.1163.0':
+    resolution: {integrity: sha512-Oe1WE/SSss3AyiZK4JtNyhepr6O1vBdPiP6zWuoVthRxQOLcUfh4+L7Vzt9n85Hv8Sg63YqVWFEcyl2X4xDSLg==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-sts@3.1163.0':
@@ -1251,6 +1276,17 @@ snapshots:
       '@aws-sdk/credential-provider-node': 3.972.93
       '@aws-sdk/middleware-sdk-s3': 3.972.86
       '@aws-sdk/signature-v4-multi-region': 3.996.51
+      '@aws-sdk/types': 3.975.0
+      '@smithy/core': 3.39.0
+      '@smithy/fetch-http-handler': 5.8.1
+      '@smithy/node-http-handler': 4.14.2
+      '@smithy/types': 4.20.0
+      tslib: 2.9.1
+
+  '@aws-sdk/client-sfn@3.1163.0':
+    dependencies:
+      '@aws-sdk/core': 3.980.0
+      '@aws-sdk/credential-provider-node': 3.972.93
       '@aws-sdk/types': 3.975.0
       '@smithy/core': 3.39.0
       '@smithy/fetch-http-handler': 5.8.1

@@ -1,0 +1,22 @@
+{
+  "name": "@cloud-engineer/pipeline",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@cloud-engineer/contracts": "workspace:*",
+    "@cloud-engineer/shared": "workspace:*",
+    "@cloud-engineer/workflow": "workspace:*",
+    "@cloud-engineer/planning": "workspace:*",
+    "@cloud-engineer/generation": "workspace:*",
+    "@cloud-engineer/validation": "workspace:*",
+    "@cloud-engineer/deployment": "workspace:*",
+    "@cloud-engineer/handoff": "workspace:*",
+    "@cloud-engineer/providers": "workspace:*"
+  }
+}
