@@ -2,7 +2,7 @@
 
 1. Live validation: enable a Bedrock model, run a model-planned `create` end to end.
 2. Live validation: deploy the example to a sandbox account with a budget alarm; confirm `verify` and teardown plan.
-3. Wire `S3ArtifactStore` into the pipeline (Dynamo run store is selectable via `CLOUD_ENGINEER_TABLE`; both offline-tested only).
+3. Live validation of the DynamoDB run store and `S3ArtifactStore` (both selectable via environment variables; offline-tested only). The generated source and `cdk.out` still live in the local state directory, so a run cannot yet be resumed from another machine.
 4. Live validation of `CodeBuildGateRunner` (per-run source/artifact overrides, artifact layout, log retrieval from CloudWatch); per-run IAM scoping.
 5. Step Functions Standard definition + approval callback (task token).
 6. CLI: `runs approve` alias.

@@ -5,6 +5,7 @@ import type { ArtifactRef, Run } from '@cloud-engineer/contracts';
 import {
   createDeploymentPlan,
   hashAssembly,
+  planHashOf,
   deploy as deployPlan,
   awsDeployDeps,
   verifyApi,
@@ -38,11 +39,25 @@ import {
 } from '@cloud-engineer/validation';
 import type { WorkflowEngine } from '@cloud-engineer/workflow';
 
+/** Durable artifact storage. When absent, artifacts are files under the local state directory. */
+export interface ArtifactStorePort {
+  put(
+    runId: string,
+    kind: ArtifactRef['kind'],
+    name: string,
+    content: string,
+  ): Promise<ArtifactRef>;
+  get(ref: ArtifactRef): Promise<string>;
+  read(runId: string, name: string): Promise<string>;
+}
+
 export interface PipelineDeps {
   engine: WorkflowEngine;
   /** Local state root, e.g. ./.cloud-engineer */
   root: string;
   provider: ModelProvider;
+  /** e.g. S3ArtifactStore; the project source and cdk.out always stay in the local state dir. */
+  artifacts?: ArtifactStorePort;
   gates?: typeof runGates;
   deployDeps?: DeployDeps;
   fetchImpl?: typeof fetch;
@@ -61,6 +76,11 @@ async function saveArtifact(
   name: string,
   content: string,
 ): Promise<ArtifactRef> {
+  if (d.artifacts) {
+    const stored = await d.artifacts.put(run.runId, kind, name, content);
+    await d.engine.attachArtifact(run.runId, stored);
+    return stored;
+  }
   const dir = join(runDir(d.root, run.runId), 'artifacts');
   await mkdir(dir, { recursive: true });
   const path = join(dir, name);
@@ -102,8 +122,26 @@ interface Intake {
 
 const now = (d: PipelineDeps) => (d.now ?? (() => new Date()))().toISOString();
 
+/**
+ * Reads a run artifact as text. From the artifact store the content must match the hash recorded in
+ * the run's latest reference with that name (the plan is verified against its plan hash by callers).
+ */
+async function readText(d: PipelineDeps, runId: string, name: string): Promise<string> {
+  if (!d.artifacts) {
+    return readFile(join(runDir(d.root, runId), 'artifacts', name), 'utf8');
+  }
+  const run = await d.engine.getRun(runId);
+  const ref = run.artifacts.findLast((a) => a.uri.endsWith(`/${name}`));
+  if (!ref) {
+    const err = new Error(`Artifact ${name} not found`) as NodeJS.ErrnoException;
+    err.code = 'ENOENT';
+    throw err;
+  }
+  return ref.kind === 'plan' ? d.artifacts.read(runId, name) : d.artifacts.get(ref);
+}
+
 async function readJson<T>(d: PipelineDeps, runId: string, name: string): Promise<T> {
-  return JSON.parse(await readFile(join(runDir(d.root, runId), 'artifacts', name), 'utf8')) as T;
+  return JSON.parse(await readText(d, runId, name)) as T;
 }
 
 /**
@@ -322,15 +360,21 @@ async function advance(d: PipelineDeps, runId: string): Promise<Run> {
             assemblySha256: await hashAssembly(join(dir, 'cdk.out')),
           });
           // The artifact's sha256 is the plan hash, which is exactly what approval binds to.
-          const planPath = join(runDir(d.root, runId), 'artifacts', 'plan.json');
-          await mkdir(join(runDir(d.root, runId), 'artifacts'), { recursive: true });
-          await writeFile(planPath, JSON.stringify(plan, null, 2));
-          await d.engine.attachArtifact(runId, {
-            kind: 'plan',
-            uri: `file://${planPath}`,
-            sha256: hash,
-            createdAt: now(d),
-          });
+          const planText = JSON.stringify(plan, null, 2);
+          if (d.artifacts) {
+            const stored = await d.artifacts.put(runId, 'plan', 'plan.json', planText);
+            await d.engine.attachArtifact(runId, { ...stored, sha256: hash });
+          } else {
+            const planPath = join(runDir(d.root, runId), 'artifacts', 'plan.json');
+            await mkdir(join(runDir(d.root, runId), 'artifacts'), { recursive: true });
+            await writeFile(planPath, planText);
+            await d.engine.attachArtifact(runId, {
+              kind: 'plan',
+              uri: `file://${planPath}`,
+              sha256: hash,
+              createdAt: now(d),
+            });
+          }
           await step('AWAITING_APPROVAL');
           break;
         }
@@ -356,9 +400,13 @@ export async function loadPlan(
   const run = await d.engine.getRun(runId);
   const ref = run.artifacts.findLast((a) => a.kind === 'plan');
   if (!ref) throw new CloudEngineerError('NOT_FOUND', 'Run has no deployment plan yet');
-  const plan = JSON.parse(
-    await readFile(join(runDir(d.root, runId), 'artifacts', 'plan.json'), 'utf8'),
-  ) as DeploymentPlan;
+  const plan = JSON.parse(await readText(d, runId, 'plan.json')) as DeploymentPlan;
+  if (planHashOf(plan) !== ref.sha256) {
+    throw new CloudEngineerError(
+      'VALIDATION_FAILED',
+      'Stored plan does not match its recorded hash',
+    );
+  }
   return { plan, hash: ref.sha256 };
 }
 
@@ -473,9 +521,7 @@ export async function exportRun(
 ): Promise<string[]> {
   const run = await d.engine.getRun(runId);
   const manifestRef = run.artifacts.findLast((a) => a.kind === 'manifest');
-  const manifest = manifestRef
-    ? JSON.parse(await readFile(join(runDir(d.root, runId), 'artifacts', 'manifest.json'), 'utf8'))
-    : undefined;
+  const manifest = manifestRef ? JSON.parse(await readText(d, runId, 'manifest.json')) : undefined;
   const written = await exportProject(projectDir(d.root, runId), output, manifest);
   if (opts.git || opts.push) {
     if (opts.push) assertSafeRemote(opts.push);

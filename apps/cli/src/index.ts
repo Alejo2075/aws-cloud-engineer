@@ -9,6 +9,7 @@ import {
   BedrockProvider,
   DynamoRunStore,
   createCodeBuildGateRunner,
+  createS3ArtifactStore,
 } from '@cloud-engineer/providers';
 import { CloudEngineerError } from '@cloud-engineer/shared';
 import { FileRunStore, WorkflowEngine } from '@cloud-engineer/workflow';
@@ -49,31 +50,31 @@ const noModel: PipelineDeps['provider'] = {
 };
 
 /**
- * Quality gates run in the CodeBuild project from `infra/` when both variables are set (uses your
- * AWS credentials); otherwise they run in the local, allow-listed sandbox.
+ * With CLOUD_ENGINEER_BUCKET, run artifacts are stored in that S3 bucket (KMS, hash-checked reads).
+ * Adding CLOUD_ENGINEER_BUILD_PROJECT also runs the quality gates in that CodeBuild project instead
+ * of the local allow-listed sandbox. Both use your AWS credentials.
  */
-function gatesFromEnv(): Pick<PipelineDeps, 'gates'> {
+function cloudFromEnv(): Pick<PipelineDeps, 'gates' | 'artifacts'> {
   const projectName = process.env.CLOUD_ENGINEER_BUILD_PROJECT;
   const bucket = process.env.CLOUD_ENGINEER_BUCKET;
-  if (!projectName && !bucket) return {};
-  if (!projectName || !bucket) {
+  if (projectName && !bucket) {
     throw new CloudEngineerError(
       'VALIDATION_FAILED',
-      'Set both CLOUD_ENGINEER_BUILD_PROJECT and CLOUD_ENGINEER_BUCKET to use CodeBuild gates',
+      'CLOUD_ENGINEER_BUILD_PROJECT also requires CLOUD_ENGINEER_BUCKET',
     );
   }
-  const runner = createCodeBuildGateRunner({
-    region: process.env.AWS_REGION ?? 'us-east-1',
-    bucket,
-    projectName,
-  });
+  if (!bucket) return {};
+  const region = process.env.AWS_REGION ?? 'us-east-1';
+  const artifacts = createS3ArtifactStore({ region, bucket });
+  if (!projectName) return { artifacts };
+  const runner = createCodeBuildGateRunner({ region, bucket, projectName });
   // The pipeline passes <root>/runs/<runId>/project.
-  return { gates: (dir) => runner.run(dir, basename(dirname(dir))) };
+  return { artifacts, gates: (dir) => runner.run(dir, basename(dirname(dir))) };
 }
 
 function deps(provider: PipelineDeps['provider'] = noModel): PipelineDeps {
   const root = resolve(program.opts<{ stateDir: string }>().stateDir);
-  return { engine: new WorkflowEngine(makeStore(root)), root, provider, ...gatesFromEnv() };
+  return { engine: new WorkflowEngine(makeStore(root)), root, provider, ...cloudFromEnv() };
 }
 
 function printQuestions(runId: string, questions: string[]) {
