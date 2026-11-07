@@ -4,6 +4,8 @@ Format: Keep a Changelog; versioning: Semantic Versioning (pre-1.0, minor versio
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
 ### Added
 
 - Domain events (`RunCreated`, `BlueprintPublished`, `BuildCompleted`, `TestsFailed`, `DeploymentApprovalRequested`, `DeploymentCompleted`, `VerificationFailed`, `SystemHandoffPublished`): derived from the audit trail, validated by a published JSON Schema (`docs/integration/domain-event.schema.json`), and published best-effort through an `EventPublisher` port (failures never affect a run). `EventBridgePublisher` and wiring into the control-plane functions (`EVENT_BUS_NAME`, `events:PutEvents` on the Cloud Engineer bus only). Verified with fakes and synth; nothing was published to a real bus. `RequirementsApproved` is not emitted because no requirements-approval step exists.
