@@ -43,5 +43,5 @@
       "acceptance": ["POST creates booking", "users only see their own bookings"]
     }
   ],
-  "risks": ["No frontend in this template"]
+  "risks": []
 }

@@ -6,7 +6,6 @@
 4. Live validation of `CodeBuildGateRunner` (per-run source/artifact overrides, artifact layout, log retrieval from CloudWatch); per-run IAM scoping.
 5. Live validation of the control plane: workflow, worker, IAM-authenticated API, the `Deployer` project and its AssumeRole path (all verified by synth and fakes only), per-run IAM scoping, and fetching CloudWatch logs for build failures.
 6. CLI: `runs approve` alias.
-7. Upgrade the frontend to React/Next.js static export; custom domain + WAF; Cognito hosted UI.
-8. PATCH (partial update) and conditional writes in the generated API.
-9. Cost estimate from the Pricing API instead of qualitative notes.
-10. Forge-specific adapters (create the repository via API, PRs); plain `export --git/--push` exists.
+7. PATCH (partial update) and conditional writes in the generated API.
+8. Cost estimate from the Pricing API instead of qualitative notes.
+9. Forge-specific adapters (create the repository via API, PRs); plain `export --git/--push` exists.

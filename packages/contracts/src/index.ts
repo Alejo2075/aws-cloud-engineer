@@ -140,7 +140,7 @@ export const ApplicationBlueprintSchema = z.object({
   components: z.array(
     z.object({
       id: z.string().min(1),
-      type: z.enum(['frontend', 'api', 'database', 'auth', 'storage', 'events']),
+      type: z.enum(['api', 'database', 'auth', 'storage', 'events']),
       awsService: z.string().min(1),
       justification: z.string().min(1),
     }),

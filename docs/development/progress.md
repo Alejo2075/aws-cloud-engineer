@@ -16,15 +16,15 @@ deployment planning/approval/deploy/verify, handoff, CLI.
 
 DynamoRunStore, S3ArtifactStore, `infra/` control-plane stack (synth + assertions), CLI `cancel`. 74 tests. Still no AWS call of any kind.
 
-### Frontend (branch feat/frontend)
+### Frontend removed
 
-Generated apps now include a static frontend on private S3 + CloudFront; 84 repo tests; generated project: 12 tests + synth. Still no AWS call of any kind.
+The static frontend (private S3 + CloudFront) added earlier was removed on request: generated apps are API only. Still no AWS call of any kind.
 
 ### Not verified / not built
 
 - No live AWS validation of any kind (no deploy, no CloudFormation/STS calls from tests).
 - Bedrock: adapter reached the service; the author's account had no usable model (403 / daily token throttle). Planning is tested with fixtures only.
-- M2+: control plane, CodeBuild isolation, frontend, resume/cancel CLI.
+- M2+: control plane, CodeBuild isolation, resume/cancel CLI.
 
 ### Notes
 
