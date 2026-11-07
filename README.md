@@ -59,15 +59,15 @@ node apps/cli/dist/index.js create "Build a booking app" --account 123456789012 
 
 ## CLI
 
-| Command                                                | Purpose                                                               |
-| ------------------------------------------------------ | --------------------------------------------------------------------- |
-| `create <prompt> --account <id> [--blueprint f]`       | Plan → generate → build/test → plan; stops for approval               |
-| `status <runId>` · `runs list` · `runs artifacts <id>` | Inspect persisted state                                               |
-| `approve <runId> --plan-hash <h> --environment <e>`    | Approve that exact plan **and deploy it**                             |
-| `respond <runId> --answer <a>...`                      | Answer the questions a `NEEDS_INPUT` run is waiting on                |
-| `resume <runId>`                                       | Retry a failed run from its failed stage                              |
-| `cancel <runId>`                                       | Cancel an active run                                                  |
-| `export <runId> --output <dir> [--git]`                | Source + `cloud-system-manifest.json`; `--git` makes one local commit |
+| Command                                                | Purpose                                                                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `create <prompt> --account <id> [--blueprint f]`       | Plan → generate → build/test → plan; stops for approval                               |
+| `status <runId>` · `runs list` · `runs artifacts <id>` | Inspect persisted state                                                               |
+| `approve <runId> --plan-hash <h> --environment <e>`    | Approve that exact plan **and deploy it**                                             |
+| `respond <runId> --answer <a>...`                      | Answer the questions a `NEEDS_INPUT` run is waiting on                                |
+| `resume <runId>`                                       | Retry a failed run from its failed stage                                              |
+| `cancel <runId>`                                       | Cancel an active run                                                                  |
+| `export <runId> --output <dir> [--git]`                | Source + `cloud-system-manifest.json`; `--git` local commit; `--push <url>` pushes it |
 
 `resume <runId>` retries a failed run from its failed stage (never after approval: deployments are not replayed).
 Set `CLOUD_ENGINEER_TABLE` to keep run metadata in DynamoDB instead of local files (uses your AWS credentials).

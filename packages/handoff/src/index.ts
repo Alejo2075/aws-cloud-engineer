@@ -155,3 +155,35 @@ export async function initGitRepository(dir: string, message = 'Initial commit')
   await git('commit', '-q', '-m', message);
   return (await git('rev-parse', 'HEAD')).stdout.trim();
 }
+
+/** https/ssh/scp-style/file remotes only, and never credentials embedded in the URL. */
+export function assertSafeRemote(url: string): void {
+  const ok =
+    /^https:\/\/[^/@\s]+\/\S+$/.test(url) ||
+    /^ssh:\/\/[^/@\s]*@?[^/@\s]+\/\S+$/.test(url) ||
+    /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:\S+$/.test(url) ||
+    /^file:\/\/\/\S+$/.test(url);
+  if (!ok || /^https:\/\/[^/]*@/.test(url) || url.startsWith('-')) {
+    throw new CloudEngineerError(
+      'VALIDATION_FAILED',
+      'Remote must be an https, ssh or file URL without embedded credentials',
+    );
+  }
+}
+
+/**
+ * Pushes the repository created by `initGitRepository` to `remoteUrl` as `main`, using the caller's
+ * own git credentials (credential helper or ssh agent). Never prompts, never force-pushes.
+ */
+export async function pushRepository(dir: string, remoteUrl: string): Promise<void> {
+  assertSafeRemote(remoteUrl);
+  const cwd = resolve(dir);
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+  await run('git', ['remote', 'add', 'origin', remoteUrl], { cwd, env });
+  try {
+    await run('git', ['push', '-u', 'origin', 'main'], { cwd, env });
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message.slice(0, 500) : String(cause);
+    throw new CloudEngineerError('CONFLICT', `git push failed: ${detail}`, cause);
+  }
+}

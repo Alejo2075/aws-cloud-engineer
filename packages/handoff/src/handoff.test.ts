@@ -1,16 +1,22 @@
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertNoSecrets,
   buildManifest,
   exportProject,
+  assertSafeRemote,
   initGitRepository,
+  pushRepository,
   manifestJsonSchema,
   manifestResources,
 } from './index.js';
+
+const run = promisify(execFile);
 
 const input = {
   systemId: 'booking-app',
@@ -88,5 +94,46 @@ describe('initGitRepository', () => {
     const rev = await initGitRepository(dir);
     expect(rev).toMatch(/^[0-9a-f]{40}$/);
     await expect(initGitRepository(dir)).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+});
+
+describe('pushRepository', () => {
+  it('rejects unsafe remotes', () => {
+    for (const bad of [
+      'https://user:token@github.com/o/r.git',
+      '--upload-pack=evil',
+      'http://github.com/o/r.git',
+      'ext::sh -c evil',
+      '/tmp/relative-path',
+    ]) {
+      expect(() => assertSafeRemote(bad), bad).toThrow();
+    }
+    for (const good of [
+      'https://github.com/o/r.git',
+      'git@github.com:o/r.git',
+      'ssh://git@github.com/o/r.git',
+      'file:///tmp/r.git',
+    ]) {
+      expect(() => assertSafeRemote(good), good).not.toThrow();
+    }
+  });
+
+  it('pushes main to a bare repository and refuses to overwrite diverged history', async () => {
+    const remote = await mkdtemp(join(tmpdir(), 'ce-remote-'));
+    const dir = await mkdtemp(join(tmpdir(), 'ce-push-'));
+    dirs.push(remote, dir);
+    await run('git', ['init', '-q', '--bare', '-b', 'main', remote]);
+    await writeFile(join(dir, 'a.txt'), 'x');
+    const rev = await initGitRepository(dir);
+    await pushRepository(dir, `file://${remote}`);
+    expect((await run('git', ['--git-dir', remote, 'rev-parse', 'main'])).stdout.trim()).toBe(rev);
+
+    const other = await mkdtemp(join(tmpdir(), 'ce-push2-'));
+    dirs.push(other);
+    await writeFile(join(other, 'b.txt'), 'y');
+    await initGitRepository(other);
+    await expect(pushRepository(other, `file://${remote}`)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
   });
 });
