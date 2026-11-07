@@ -36,7 +36,11 @@ referenced from the run by URI + SHA-256. The run record holds only metadata.
 
 `providers` contains `DynamoRunStore` (single table + `byCreatedAt` GSI, conditional writes) and
 `S3ArtifactStore` (KMS, SHA-256 checked reads). `infra/` defines the matching table, bucket, event bus and a
-CodeBuild gate project. None of it has run against AWS and the CLI does not use it yet.
+CodeBuild gate project. `CodeBuildGateRunner` (providers) uploads a run's source to `build-input/<runId>/`,
+starts a build with per-run source and artifact locations, waits within a time budget (stopping the build on
+timeout) and downloads `cdk.out`. The CLI uses it only when `CLOUD_ENGINEER_BUILD_PROJECT` and
+`CLOUD_ENGINEER_BUCKET` are set. None of it has run against AWS; the CodeBuild API behavior (per-run overrides,
+artifact layout) is unverified.
 
 ## Target (not built)
 

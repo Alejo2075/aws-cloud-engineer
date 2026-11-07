@@ -28,9 +28,10 @@ Known exception: the site deployment role needs `cloudfront:CreateInvalidation` 
 
 ## Not yet implemented
 
-- The CodeBuild gate role can read only `build-input/*` in the artifact bucket; copying a single run's source
-  there (and scoping per run with a session policy) is not implemented yet. The role can still list key names in the
-  bucket (CDK adds bucket-level `s3:List*`), though it cannot read objects outside `build-input/`.
+- The CodeBuild gate role can read only `build-input/*` and write only `build-output/*` in the artifact bucket,
+  never `runs/*`. `CodeBuildGateRunner` places one run's source under `build-input/<runId>/`, but the role can read
+  every run's prefix there (per-run scoping with a session policy is not implemented). It can also list key names in
+  the bucket (CDK adds bucket-level `s3:List*`).
 
 The local sandbox is defense in depth, **not** an isolation boundary: generated code still runs as your
 OS user with network access. Production design: ephemeral CodeBuild with a dedicated role, separate

@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { Command } from 'commander';
 import { renderPlan } from '@cloud-engineer/deployment';
-import { BedrockProvider, DynamoRunStore } from '@cloud-engineer/providers';
+import {
+  BedrockProvider,
+  DynamoRunStore,
+  createCodeBuildGateRunner,
+} from '@cloud-engineer/providers';
 import { CloudEngineerError } from '@cloud-engineer/shared';
 import { FileRunStore, WorkflowEngine } from '@cloud-engineer/workflow';
 import {
@@ -44,9 +48,32 @@ const noModel: PipelineDeps['provider'] = {
     ),
 };
 
+/**
+ * Quality gates run in the CodeBuild project from `infra/` when both variables are set (uses your
+ * AWS credentials); otherwise they run in the local, allow-listed sandbox.
+ */
+function gatesFromEnv(): Pick<PipelineDeps, 'gates'> {
+  const projectName = process.env.CLOUD_ENGINEER_BUILD_PROJECT;
+  const bucket = process.env.CLOUD_ENGINEER_BUCKET;
+  if (!projectName && !bucket) return {};
+  if (!projectName || !bucket) {
+    throw new CloudEngineerError(
+      'VALIDATION_FAILED',
+      'Set both CLOUD_ENGINEER_BUILD_PROJECT and CLOUD_ENGINEER_BUCKET to use CodeBuild gates',
+    );
+  }
+  const runner = createCodeBuildGateRunner({
+    region: process.env.AWS_REGION ?? 'us-east-1',
+    bucket,
+    projectName,
+  });
+  // The pipeline passes <root>/runs/<runId>/project.
+  return { gates: (dir) => runner.run(dir, basename(dirname(dir))) };
+}
+
 function deps(provider: PipelineDeps['provider'] = noModel): PipelineDeps {
   const root = resolve(program.opts<{ stateDir: string }>().stateDir);
-  return { engine: new WorkflowEngine(makeStore(root)), root, provider };
+  return { engine: new WorkflowEngine(makeStore(root)), root, provider, ...gatesFromEnv() };
 }
 
 function printQuestions(runId: string, questions: string[]) {
