@@ -9,7 +9,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "3.1163.0",
+    "@aws-sdk/client-bedrock-runtime": "3.1165.0",
     "@aws-sdk/client-codebuild": "3.1163.0",
     "@aws-sdk/client-dynamodb": "3.1163.0",
     "@aws-sdk/client-eventbridge": "3.1163.0",
