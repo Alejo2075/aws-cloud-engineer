@@ -9,7 +9,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1163.0",
     "@aws-sdk/client-s3": "3.1163.0",
-    "@aws-sdk/lib-dynamodb": "3.1163.0",
+    "@aws-sdk/lib-dynamodb": "3.1165.0",
     "@cloud-engineer/deployment": "workspace:*",
     "@cloud-engineer/pipeline": "workspace:*",
     "@cloud-engineer/providers": "workspace:*",
